@@ -11,3 +11,5 @@ google-genai                # Gemini client (src/ads/llm/client.py)
 python-dotenv
 pyyaml
 pytest
+streamlit                   # demonstrator (src/ads/app.py)
+requests                    # optional URL fetch in the demo
