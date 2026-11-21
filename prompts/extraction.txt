@@ -19,6 +19,10 @@ One case = one scam campaign instance. It arrives as labeled parts; any part may
 - LANGUAGE: keep `extracted_text_verbatim`, exact entity names, brand names, and product names in their ORIGINAL language (do not translate or transliterate). Write every analytical field in English regardless of source language.
 - PERSON IDENTIFICATION (NEVER FROM FACIAL FEATURES): set `name` only when (a) an input text explicitly names the person as the one shown/quoted (caption, lower-third, quote attribution), (b) the person is named in `[RESOLVED_IDENTITIES]`, or (c) page text unambiguously identifies the single person depicted in the creative (e.g., an article about X whose lead image/circle portrait is the only person shown). Record the basis in `identity_basis`. Otherwise set `name` to `null`, `category_or_role` to the evident functional role or "unidentified_speaker", and `requires_external_face_recognition` to `true`. Fictional/generic names shown as speakers or commenters (e.g., fake event speakers, fake commenters) are recorded as people only if they are prominently featured; their role gets category "other" and they are not celebrity impersonations.
 - PRIVACY: never output personal data of whoever captured the material (their account name, e-mail, device or location data, cookies, tokens). Never output data about private individuals appearing as commenters unless it is part of the scam's visible fake social proof, and then only as the generic device `fake_comments`.
+- PRECISION FOR ENTITY LISTS: prefer a short, accurate list over a long one.
+  - `featured_people`: only people who are shown in the creative, quoted as protagonists, or central to the story. Exclude article bylines and editors, commenters, and people mentioned in passing.
+  - `companies_or_institutions`: only organisations that are advertised, impersonated, or central to the hook (at most 5). Do not list every organisation mentioned in the text, and do not repeat outlets already in `impersonated_media`.
+  - `amounts`: the 3 to 8 figures central to the offer or hook (prices, deposits, returns, discounts, key statistics), not every number in the text.
 - CLOSED VOCABULARIES: for fields marked ENUM use exactly one of the listed values (lower_snake_case); "other" only if nothing fits.
 - NOT-A-SCAM CASE: if there is no fraudulent or deceptive intent, still fill the profile and set `ad_goal_scam_type` to "not_suspicious".
 
@@ -43,7 +47,7 @@ Return ONLY valid JSON matching the exact schema below. No markdown commentary.
 
 {
   "detected_language": "ISO-639-1 code (e.g., 'pl') or null",
-  "extracted_text_verbatim": "All ad copy, OCR text, page text and transcripts in ORIGINAL language, each part prefixed with its marker on its own line: [[AD_CREATIVE]], [[BRIDGE_PAGE]], [[OFFER_PAGE]], [[VIDEO_TRANSCRIPT]]. Exclude OS UI text and feed UI. If a page part exceeds ~3000 words keep the headline, lead and every paragraph containing entities, amounts, or the CTA, marking omissions with [...]",
+  "extracted_text_verbatim": "ONLY the original-language text visible in the ad creative itself (OCR of the ad image or video frames: headlines, captions, lower thirds, subtitles, the post text and button labels), one item per line. Do NOT copy text from [BRIDGE_PAGE], [OFFER_PAGE] or [DECOY_PAGE] and do not include the video transcript: the system appends those parts itself. Exclude OS UI and feed UI text. Empty string if the creative contains no readable text",
   "core_narrative": {
     "ad_goal_scam_type": "ENUM",
     "narrative_pattern": "English. Core storyline or hook without specific names (e.g., 'shocking live-TV incident suppressed by authorities, followed by a revealed money-making platform')",

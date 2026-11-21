@@ -23,3 +23,4 @@ tests/fixtures/profiles/
 data/gold/*.local.json
 data/cases/*/
 scripts/build_fixtures.py
+scripts/make_manifests.py

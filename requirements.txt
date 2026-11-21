@@ -7,3 +7,7 @@ deepface                    # face_identity_module.py (pulls TensorFlow; model w
 tf-keras                    # needed by recent DeepFace with TensorFlow 2.16+
 # har_to_technical_summary.py and validate_variants.py use only the standard library
 jsonschema                  # validate case_input / profile / variant JSON against schemas/
+google-genai                # Gemini client (src/ads/llm/client.py)
+python-dotenv
+pyyaml
+pytest
