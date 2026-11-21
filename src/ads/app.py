@@ -19,7 +19,7 @@ from ads import cluster as clu  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
 from ads.similarity import score  # noqa: E402
 
-MODELS = ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-flash-lite"]
+MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.7-flash"]
 COLORS = {"fake_investment": "#4C78A8", "miracle_cure": "#54A24B", "fake_online_casino": "#E45756",
           "fake_online_shop": "#F58518", "other": "#999999"}
 
@@ -69,6 +69,30 @@ def show_neighbours(profile, db, tau):
             top = sorted(r["contributions"].items(), key=lambda x: -x[1])
             st.markdown("**Why similar (weighted contribution):** " + ", ".join(f"{k} {v:.2f}" for k, v in top if v > 0) or "-")
             st.caption("Not comparable (missing on one side): " + (", ".join(r["missing"]) or "-"))
+
+
+def save_case(case, profile):
+    """Persist a scanned case as data/cases/web_<n>/ so it joins the database (gitignored directory)."""
+    import shutil
+    base = os.path.join(ev.REPO, "data", "cases")
+    n = 1
+    while os.path.exists(os.path.join(base, f"web_{n}")):
+        n += 1
+    cid = f"web_{n}"
+    d = os.path.join(base, cid)
+    os.makedirs(d)
+    case = json.loads(json.dumps(case))
+    case["case_id"] = cid
+    for part in case["parts"]:
+        saved = []
+        for img in part.get("images", []):
+            shutil.copy(img, os.path.join(d, os.path.basename(img)))
+            saved.append(f"cases/{cid}/{os.path.basename(img)}")
+        part["images"] = saved
+    json.dump(case, open(os.path.join(d, "case_input.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    json.dump(profile, open(os.path.join(d, "profile.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    database.clear()
+    return cid
 
 
 def build_case(files, url, text, product):
@@ -146,11 +170,18 @@ with tab1:
                         from ads.llm.extract import extract
                         prof = extract(case, make_client(extraction_model=model))
                         st.session_state["new_profile"] = prof
+                        st.session_state["new_case"] = case
+                        st.session_state.pop("saved_id", None)
                     except Exception as e:  # noqa: BLE001
                         st.error(f"Extraction failed: {str(e)[:400]}")
         if "new_profile" in st.session_state:
             prof = st.session_state["new_profile"]
             show_profile(prof)
+            if st.session_state.get("saved_id"):
+                st.success(f"Saved to the database as {st.session_state['saved_id']} (data/cases/, not shared via git).")
+            elif st.button("Save to database", help="Adds this scan to the database so later cases are compared with it."):
+                st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof)
+                st.rerun()
             st.subheader("Comparison with the database")
             show_neighbours(prof, db, tau)
 

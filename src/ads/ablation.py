@@ -83,6 +83,7 @@ def main() -> None:
         a.gold = os.path.join(REPO, "data", "gold", "groups.json")
     taus = [float(t) for t in a.taus.split(",")]
     profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
+    profiles = {k: v for k, v in profiles.items() if k in set(gold.get("case_ids") or profiles)}
     variants = load_variants(profiles)
     n_var = sum(len(v) for v in variants.values())
     print(f"cases: {len(profiles)}, cases with variants: {sorted(variants)}, variants: {n_var}")

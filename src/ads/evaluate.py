@@ -43,7 +43,9 @@ def prf(pred: Set[tuple], truth: Set[tuple]):
 
 
 def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None) -> dict:
-    scores = scores or pair_scores(profiles)
+    ids = set(gold.get("case_ids") or profiles)  # cases saved from the demo are not in the gold labels
+    profiles = {k: v for k, v in profiles.items() if k in ids}
+    scores = {k: v for k, v in (scores or pair_scores(profiles)).items() if k[0] in ids and k[1] in ids}
     sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
     triples = [t for t in gold["ranking_triples"] if {t["anchor"], t["closer"], t["farther"]} <= set(profiles)]
     ok = [(t, sc(t["anchor"], t["closer"]), sc(t["anchor"], t["farther"])) for t in triples]
