@@ -11,6 +11,7 @@ dicts (`variant_to_profile`) so they can be scored exactly like real profiles.
 """
 import argparse
 import copy
+import hashlib
 import json
 import os
 import sys
@@ -38,6 +39,10 @@ def variant_to_profile(parent: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, A
     p["_synthetic"] = True
     p["_mutated_fields"] = v["mutated_fields"]
     return p
+
+
+def profile_sha(case_id: str) -> str:
+    return hashlib.sha256(open(os.path.join(CASES, case_id, "profile.json"), "rb").read()).hexdigest()[:16]
 
 
 def _errors_by_variant(errors: List[str]) -> Dict[str, List[str]]:
@@ -74,7 +79,12 @@ def generate(case_id: str, n: int, k: int, model: str, allowed_slots=None, pools
     def _norm(o):  # some models return a bare list of variants
         return {"parent_ad_id": case_id, "generation_notes": [], "variants": o} if isinstance(o, list) else o
 
-    out = _norm(client.generate_json(system, parts))
+    try:
+        out = _norm(client.generate_json(system, parts))
+    except ValueError as e:  # malformed JSON: ask once more
+        out = _norm(client.generate_json(system, parts + [("text", f"Your previous reply was not valid JSON ({e}). "
+                                                                   "Return the complete JSON again with all strings escaped.")],
+                                         use_cache=False))
     for attempt in range(2):
         dropped = sum(drop_bad_patches(parent["extracted_text_verbatim"], v) for v in out.get("variants", []))
         errors = [f"schema {'/'.join(map(str, e.absolute_path))}: {e.message[:120]}" for e in schema.iter_errors(out)]
@@ -83,13 +93,16 @@ def generate(case_id: str, n: int, k: int, model: str, allowed_slots=None, pools
             break
         retry = parts + [("text", "Your previous output had these problems:\n" + "\n".join(errors[:20]) +
                           "\nReturn the full corrected JSON.")]
-        out = _norm(client.generate_json(system, retry, use_cache=False))
+        try:
+            out = _norm(client.generate_json(system, retry, use_cache=False))
+        except ValueError:  # the repair itself came back malformed: keep the first answer, drop invalid variants below
+            break
     bad = _errors_by_variant(errors)
     keep, rejected = [], []
     for v in out.get("variants", []):
         vtag = f"variant {v.get('variant_index')}"
         (rejected if vtag in bad else keep).append(v)
-    result = {"parent_ad_id": case_id, "model": model, "N": n, "k": k, "dropped_patches": dropped,
+    result = {"parent_ad_id": case_id, "parent_profile_sha": profile_sha(case_id), "model": model, "N": n, "k": k, "dropped_patches": dropped,
               "generation_notes": out.get("generation_notes", []), "variants": keep,
               "rejected": [{"variant_index": v.get("variant_index"), "errors": bad[f"variant {v.get('variant_index')}"][:5]}
                            for v in rejected],

@@ -21,7 +21,7 @@ import sys
 from typing import Dict, List
 
 from .evaluate import REPO, gold_pairs, load_profiles
-from .llm.generate import variant_to_profile
+from .llm.generate import profile_sha, variant_to_profile
 from .similarity import score
 
 DEMO_SLOT = "non_grouping_attributes.unidentified_people_demographics"
@@ -32,8 +32,12 @@ def load_variants(profiles: Dict[str, dict], name: str = "variants.json") -> Dic
     for cid, parent in profiles.items():
         f = os.path.join(REPO, "data", "cases", cid, name)
         if os.path.exists(f):
+            data = json.load(open(f, encoding="utf-8"))
+            if data.get("parent_profile_sha") not in (None, profile_sha(cid)):
+                print(f"warning: variants of case {cid} are stale (profile changed since generation), skipped: {name}")
+                continue
             parent = dict(parent, _case_id=cid)
-            out[cid] = [variant_to_profile(parent, v) for v in json.load(open(f, encoding="utf-8"))["variants"]]
+            out[cid] = [variant_to_profile(parent, v) for v in data["variants"]]
     return out
 
 

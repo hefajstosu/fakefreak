@@ -88,7 +88,13 @@ class LLMClient:
 
     def generate_json(self, system: str, parts: List[Part], use_cache: bool = True) -> Dict[str, Any]:
         text = self.generate_text(system, parts, use_cache)
-        return parse_json(text)
+        try:
+            return parse_json(text)
+        except ValueError:  # malformed output must not stay cached, or every rerun would fail the same way
+            path = os.path.join(self.cache_dir, self._key(system, parts) + ".txt")
+            if os.path.exists(path):
+                os.remove(path)
+            raise
 
 
 def parse_json(text: str) -> Dict[str, Any]:

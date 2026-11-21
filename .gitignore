@@ -24,3 +24,6 @@ data/gold/*.local.json
 data/cases/*/
 scripts/build_fixtures.py
 scripts/make_manifests.py
+scripts/fetch_refs.py
+data/refs/categories.json
+data/refs/SOURCES.md
