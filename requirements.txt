@@ -1,4 +1,0 @@
-sentence-transformers>=2.7
-spacy>=3.7,<4
-requests>=2.31
-numpy>=1.24
