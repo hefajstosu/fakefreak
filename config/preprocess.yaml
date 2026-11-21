@@ -1,0 +1,15 @@
+# Track A. Initial values: adjust after the first real runs.
+raw_dir: data/raw/do_udostępnienia
+cases_dir: data/cases
+video:
+  whisper_model: medium        # faster-whisper; use "small" if CPU only
+  language: pl
+  samples: 48
+  crop_top: 0.0                # e.g. 0.06 for phone screen recordings (status bar)
+  roi: null                    # "x,y,w,h" fractions, to cut feed UI around the ad
+faces:
+  model: Facenet512
+  detector: retinaface
+  threshold: 0.30              # cosine distance; tune on our own data
+  margin: 0.05
+  refs_dir: data/refs

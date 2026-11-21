@@ -1,0 +1,9 @@
+# Preprocessing pipeline (Python 3.9+)
+numpy
+pillow
+opencv-python-headless      # video_to_case_inputs.py
+faster-whisper              # Polish speech-to-text (decodes audio itself; GPU optional)
+deepface                    # face_identity_module.py (pulls TensorFlow; model weights download on first use)
+tf-keras                    # needed by recent DeepFace with TensorFlow 2.16+
+# har_to_technical_summary.py and validate_variants.py use only the standard library
+jsonschema                  # validate case_input / profile / variant JSON against schemas/

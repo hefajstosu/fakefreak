@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "case_input.schema.json",
+  "title": "Case input: everything known about one scam-campaign instance (Track A output, Track B input)",
+  "description": "One case = one ad plus the pages and logs behind it. Built by src/ads/preprocess/assemble.py, consumed by src/ads/llm/extract.py, which turns the parts into the labeled sections of prompts/extraction.txt ([AD_CREATIVE], [BRIDGE_PAGE], [OFFER_PAGE], [DECOY_PAGE], [TECHNICAL_SUMMARY], [RESOLVED_IDENTITIES]). All file paths are relative to the repository's data/ directory and use forward slashes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "parts", "technical_summary", "resolved_identities"],
+  "definitions": {
+    "path": {"type": "string", "minLength": 1, "pattern": "^[^\\\\]+$"},
+    "pathArray": {"type": "array", "items": {"$ref": "#/definitions/path"}},
+    "strArray": {"type": "array", "items": {"type": "string"}},
+    "role": {"enum": ["politician", "journalist", "news_anchor", "athlete", "celebrity", "doctor",
+      "lawyer", "economist_or_financier", "business_leader", "public_official", "religious_figure",
+      "unidentified_speaker", "other"]},
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "medium"],
+      "properties": {
+        "role": {
+          "enum": ["ad_creative", "bridge_page", "offer_page", "decoy_page"],
+          "description": "Funnel stage this part plays. At most one ad_creative per case; several pages of the same role are allowed (e.g. a multi-step quiz) and are concatenated in the given order."
+        },
+        "medium": {
+          "enum": ["image", "video", "html", "text"],
+          "description": "How the part was captured. Only used for preprocessing and for choosing what to send to the model; the extraction output never mentions it."
+        },
+        "source_files": {
+          "$ref": "#/definitions/pathArray",
+          "description": "Original files this part was built from (traceability only; the model never sees them)."
+        },
+        "text": {
+          "type": ["string", "null"],
+          "description": "Visible text of a page or message, in its original language, with scripts/styles removed and OS/feed UI excluded. null for pure images and videos (the model OCRs them)."
+        },
+        "images": {
+          "$ref": "#/definitions/pathArray",
+          "description": "Images shown to the model: ad screenshots, or the 2x2 contact sheet of a video (contact_sheet.jpg). Screenshots should already be cropped to the sponsored item where possible."
+        },
+        "transcript": {
+          "type": ["string", "null"],
+          "description": "Original-language speech transcript for video parts; null if there is no speech or transcription was not run. Never invented."
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Free-text hint from the person assembling the case (e.g. 'second page of the quiz'). Not shown to the model."
+        }
+      },
+      "anyOf": [
+        {"required": ["text"], "properties": {"text": {"type": "string", "minLength": 1}}},
+        {"required": ["images"], "properties": {"images": {"minItems": 1}}},
+        {"required": ["transcript"], "properties": {"transcript": {"type": "string", "minLength": 1}}}
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "description": "A person shown in the creative whose identity was established OUTSIDE the LLM: by the face-recognition module, by a human annotator, or from a caption. Mirrors the output of src/ads/preprocess/faces.py.",
+      "additionalProperties": false,
+      "required": ["name", "category_or_role", "identity_basis"],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "category_or_role": {"anyOf": [{"$ref": "#/definitions/role"}, {"type": "null"}]},
+        "identity_basis": {"enum": ["resolved_by_face_module", "manual_annotation", "caption_or_text"]},
+        "requires_external_face_recognition": {"type": "boolean"},
+        "source_image": {"type": "string"},
+        "face_box": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "w", "h"],
+          "properties": {"x": {"type": "integer"}, "y": {"type": "integer"},
+                         "w": {"type": "integer"}, "h": {"type": "integer"}}
+        },
+        "distance": {"type": "number"},
+        "nearest_candidate_unconfirmed": {"type": ["string", "null"]}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "case_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Stable ID, normally the sample folder name (e.g. '48'). Becomes parent_ad_id for generated variants."
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/part"}
+    },
+    "technical_summary": {
+      "type": "object",
+      "description": "Output of src/ads/preprocess/har.py (the 'technical_artifacts' object, minus ad_library_metadata, which comes from the creative). Empty arrays when no network log exists.",
+      "additionalProperties": false,
+      "required": ["urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues",
+                   "domain_and_cert_metadata"],
+      "properties": {
+        "urls_and_domains": {"$ref": "#/definitions/strArray"},
+        "redirect_chain": {"$ref": "#/definitions/strArray"},
+        "tracker_ids": {"$ref": "#/definitions/strArray"},
+        "dom_and_form_clues": {"$ref": "#/definitions/strArray"},
+        "domain_and_cert_metadata": {"$ref": "#/definitions/strArray"}
+      }
+    },
+    "resolved_identities": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/identity"},
+      "description": "Identities established outside the LLM. Empty array if none."
+    }
+  }
+}

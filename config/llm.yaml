@@ -1,0 +1,16 @@
+# Track B. Initial values.
+provider: gemini               # gemini | mistral | openrouter (all behind one client interface)
+api_key_env: GEMINI_API_KEY    # key from Google AI Studio, put it in .env
+# Pick a current vision-capable Flash-class model from AI Studio; free-tier limits are per model and per project.
+extraction_model: TO_SET
+generation_model: TO_SET
+cache_dir: .cache/llm
+max_retries: 2
+prompts:
+  extraction: prompts/extraction.txt
+  alternatives: prompts/alternatives.txt
+variants:
+  N: 4                         # variants per case
+  k: 2                         # mutated slots per variant
+  allowed_slots: null          # null = all slots in the prompt
+  retry_rejected: 1

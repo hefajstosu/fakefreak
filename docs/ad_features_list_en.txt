@@ -1,0 +1,138 @@
+AD FEATURE LIST (COMPARISON, GROUPING, ALTERNATIVES)
+=========================================================
+Test sources are in Polish; examples below keep Polish names.
+
+1. SEMANTIC AND NARRATIVE FEATURES (CAMPAIGN CORE)
+---------------------------------------------------------
+Rule: They form the core safeguard. Do not change their meaning.
+
+- Ad goal / scam type
+  Examples: fake investment, miracle cure, banking phishing, fake giveaway, disinformation
+  Grouping: Core (high weight)
+  Alternatives: NO
+
+- Narrative pattern / main motif
+  Examples: "interview recording leaked", "government/doctors hide the truth", "celebrity arrested", "new payout program"
+  Grouping: Core (high weight)
+  Alternatives: PARAPHRASE ONLY (different words, same meaning)
+
+- Promise and mechanism
+  Examples: "deposit 1000 PLN, earn 5000 PLN weekly", "one capsule cures diabetes"
+  Grouping: Core (high weight)
+  Alternatives: PARAPHRASE ONLY / minor change of numbers
+
+- Call to action (CTA)
+  Examples: "register", "leave your phone number", "click before they delete it", "claim your subsidy"
+  Grouping: Supporting (medium weight)
+  Alternatives: YES (CTA synonyms)
+
+- Topic and keywords
+  Examples: finance/crypto, health/joints, energy, politics + 5-10 key phrases
+  Grouping: Core / supporting
+  Alternatives: PARTIALLY (replace proper nouns with industry synonyms)
+
+
+2. ENTITY FEATURES (MAIN TARGET OF ALTERNATIVES)
+---------------------------------------------------------
+Rule: They take part in grouping originals and are the main mutation slots.
+
+- Person / likeness used
+  Examples: a specific person from the reference base (politician, journalist, athlete) or a role ("doctor", "lawyer"). The LLM never identifies faces; use DeepFace for unnamed people.
+  Grouping: High weight
+  Alternatives: YES - Priority 1 (swap for another person of the same category)
+
+- Advertised or impersonated company / institution
+  Examples: Orlen, PKO BP, KGHM, PGE, NFZ, Ministry of Finance, retail chain
+  Grouping: High weight
+  Alternatives: YES - Priority 1 (swap for another company of the same industry)
+
+- Advertised product / platform name
+  Examples: "Baltic Pipe Profit", "Quantum AI", "CardioActive", "Polski Gaz Plus"
+  Grouping: Very high weight
+  Alternatives: YES - Priority 2 (swap the name or use the generic token [PRODUCT])
+
+- Impersonated medium / news portal
+  Examples: TVP Info, Onet, Fakt, TVN24, WP, newspaper layout or morning show layout
+  Grouping: High weight
+  Alternatives: YES - Priority 1 (swap for another popular medium)
+
+- Specific amounts, dates and locations
+  Examples: "1000 PLN", "from 1 November", "for residents of Poland / a voivodeship"
+  Grouping: Low weight
+  Alternatives: YES - Priority 2 (change/scale values)
+
+
+3. VISUAL AND PRODUCTION FEATURES (CREATIVE TEMPLATE)
+---------------------------------------------------------
+Rule: The template links the campaign; props are subject to mutation.
+
+- Ad creative template (framing of the ad itself, medium-neutral)
+  Examples: fake news report, fake breaking news, fake incident footage, fake interview, fake expert endorsement, AI-generated lifestyle image
+  Grouping: High weight
+  Alternatives: NO
+
+- Landing page template (the page the ad leads to)
+  Examples: fake news article, video sales letter page, fake app-store page, fake event site, quiz funnel, fake shop page, lead form page
+  Grouping: High weight
+  Alternatives: NO
+
+- Funnel stages present in the case
+  Examples: ad -> bridge page (fake article) -> offer page (quiz/order form); a decoy page may also exist
+  Grouping: Medium weight
+  Alternatives: NO
+
+- Persuasion devices (campaign template signals)
+  Examples: countdown timer, limited-stock counter ("only 17 left"), struck-through price / 50% discount, fake comments, fake testimonials, fake doctor/expert, celebrity endorsement, fake LIVE/breaking label, demographic quiz, AI-generated imagery
+  Grouping: Medium weight (cheap for operators to reuse, so they link campaigns across products)
+  Alternatives: NO (locked); wording must stay consistent with mutated amounts
+
+- Background scenery and props
+  Examples: TV studio, courtroom, doctor's office, car brand, banknotes, handcuffs, stock chart
+  Grouping: Medium-low weight (reinforcing only)
+  Alternatives: YES - Priority 1 (swap the object, car brand or background)
+
+- Visual layout hash
+  Examples: pHash/dHash (duplicates), CLIP vector of the whole graphic
+  Grouping: High weight
+  Alternatives: LIGHT AUGMENTATIONS (face masking, contrast change/crop). Handled by an image pipeline, not by the LLM prompts.
+
+
+4. TECHNICAL AND INFRASTRUCTURE FEATURES (HARD TRACES)
+---------------------------------------------------------
+Rule: Never mutate. They serve as hard anchors linking the campaign.
+
+- Tracker IDs in page code
+  Examples: Meta Pixel ID, Google Analytics / GTM ID, TikTok Pixel
+  Evidential strength: Extremely high
+
+- Landing page structure (DOM)
+  Examples: HTML tag tree hash, form field names, shared JS/CSS script names
+  Evidential strength: Very high
+
+- Domain and redirect chain
+  Examples: target domain, intermediate domains, URL path and parameter pattern (e.g., utm_campaign)
+  Evidential strength: Very high
+
+- Domain and certificate metadata
+  Examples: registration date, related domains in the SSL certificate (SAN), unique DNS servers (NS), dedicated IPs
+  Evidential strength: Medium-high (weighted by rarity)
+
+- Ad library metadata
+  Examples: ID of the page/fanpage publishing the ad, coinciding dates, payer name
+  Evidential strength: High
+
+
+5. NON-GROUPING FEATURES (WEIGHT = 0 IN GROUPING)
+---------------------------------------------------------
+Rule: They must not create groups or affect similarity. NOTE: demographic traits ARE generated as alternatives (Priority 1 mutation slot) so the system can be tested for invariance to them, but they are stored in a separate bucket (non_grouping_attributes) and excluded from the comparison text.
+
+- Demographic traits of unidentified people:
+  skin color, hair color, gender, approximate age of a random model/extra.
+  Alternatives: YES (non-grouping slot; must not change any other field)
+
+- Common mass infrastructure:
+  the mere use of Cloudflare, AWS, Google Cloud, or the most popular domain registrar.
+  Alternatives: NO
+
+- Screenshot technical artifacts (status bar, battery, clock, OS UI, dark/light mode, resolution).
+  Alternatives: NO

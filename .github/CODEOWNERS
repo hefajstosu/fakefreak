@@ -1,0 +1,23 @@
+# Replace the placeholders with the real GitHub usernames, then enable "Require review from Code Owners"
+# on main. Until then this file only documents who owns what.
+/src/ads/preprocess/        @TRACK_A_USER
+/data/cases/                @TRACK_A_USER
+/data/refs/                 @TRACK_A_USER
+/config/preprocess.yaml     @TRACK_A_USER
+
+/src/ads/llm/               @TRACK_B_USER
+/src/ads/validate.py        @TRACK_B_USER
+/prompts/                   @TRACK_B_USER
+/config/llm.yaml            @TRACK_B_USER
+
+/src/ads/features.py        @TRACK_C_USER
+/src/ads/embed.py           @TRACK_C_USER
+/src/ads/cluster.py         @TRACK_C_USER
+/src/ads/store.py           @TRACK_C_USER
+/src/ads/evaluate.py        @TRACK_C_USER
+/data/gold/                 @TRACK_C_USER
+/config/cluster.yaml        @TRACK_C_USER
+
+# Shared contracts: all three approve
+/schemas/                   @TRACK_A_USER @TRACK_B_USER @TRACK_C_USER
+/docs/                      @TRACK_A_USER @TRACK_B_USER @TRACK_C_USER

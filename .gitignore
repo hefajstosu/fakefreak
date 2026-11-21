@@ -1,0 +1,25 @@
+# secrets and local state
+.env
+.venv/
+__pycache__/
+*.pyc
+# raw samples: personal/sensitive captures (HARs, screen recordings), never commit
+do_udostępnienia/
+data/raw/
+# caches and derived artifacts
+.cache/
+data/cases/*/contact_sheet.jpg
+data/refs/*/
+*.npz
+
+# Organiser materials: public redistribution forbidden (rules, section 8) -- from the team's earlier .gitignore
+manual.pdf
+dane/
+.DS_Store
+
+# Derived from the organiser's sample data: regenerate locally, never commit
+tests/fixtures/case_input/
+tests/fixtures/profiles/
+data/gold/*.local.json
+data/cases/*/
+scripts/build_fixtures.py

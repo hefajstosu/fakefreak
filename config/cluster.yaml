@@ -1,0 +1,29 @@
+# Track C. Weights are a first guess from docs/lista_cech_reklam.txt; tune on data/gold.
+embedding_model: intfloat/multilingual-e5-small   # same model as the earlier minimal implementation; try bge-m3 later
+weights:                       # applied to similarity in [0,1], over features present in both items
+  scam_type: 1.0
+  narrative: 0.8
+  promise: 0.8
+  product_name: 1.0
+  featured_people: 0.8
+  companies: 0.8
+  impersonated_media: 0.8
+  ad_creative_template: 0.8
+  landing_page_template: 0.8
+  persuasion_devices: 0.5
+  call_to_action: 0.5
+  setting_and_props: 0.3
+  amounts_dates_locations: 0.2
+  embedding: 0.8
+anchors:                       # exact-match technical artifacts, weighted by rarity log(N/df)
+  tracker_ids: 1.0
+  redirect_chain_domains: 0.9
+  dom_and_form_clues: 0.8
+  ad_library_page_name: 0.7
+ignore_values: []              # mass-infrastructure values never used as evidence
+thresholds:
+  global_tau: 0.60
+  k_sigma: 2.0
+  min_members_for_calibration: 3
+  top_k: 3
+  strong_link: 0.90

@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "profile.schema.json",
+  "title": "Extracted ad-case profile (output of prompts/extraction.txt)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["detected_language", "extracted_text_verbatim", "core_narrative", "entities",
+               "visual_and_production", "non_grouping_attributes", "technical_artifacts",
+               "canonical_comparison_text"],
+  "definitions": {
+    "strOrNull": {"type": ["string", "null"]},
+    "strArray": {"type": "array", "items": {"type": "string"}},
+    "scamType": {"enum": ["fake_investment", "fake_online_casino", "miracle_cure", "banking_phishing",
+      "fake_giveaway", "fake_subsidy_or_payout", "fake_online_shop", "political_disinformation",
+      "impersonation_other", "not_suspicious", "other"]},
+    "topic": {"enum": ["finance_crypto", "gambling", "health", "energy", "politics", "e_commerce",
+      "banking", "government_benefits", "real_estate", "employment", "other"]},
+    "role": {"enum": ["politician", "journalist", "news_anchor", "athlete", "celebrity", "doctor",
+      "lawyer", "economist_or_financier", "business_leader", "public_official", "religious_figure",
+      "unidentified_speaker", "other"]},
+    "identityBasis": {"enum": ["caption_or_text", "resolved_by_face_module", "manual_annotation", "inferred_from_page_text", "none"]},
+    "adTemplate": {"enum": ["fake_news_report", "fake_breaking_news", "fake_incident_footage",
+      "fake_interview", "fake_official_announcement", "fake_testimonial", "fake_expert_endorsement",
+      "before_after_comparison", "fake_social_post", "fake_chat_or_message",
+      "ai_generated_lifestyle_image", "other", null]},
+    "landingTemplate": {"enum": ["fake_news_article", "video_sales_letter_page", "fake_app_store_page",
+      "fake_event_site", "quiz_funnel", "fake_shop_page", "lead_form_page", "other", null]},
+    "funnelStage": {"enum": ["ad", "bridge_page", "offer_page", "decoy_page"]},
+    "persuasionDevice": {"enum": ["countdown_timer", "limited_stock_counter", "time_limited_offer",
+      "price_anchoring", "fake_comments", "fake_testimonials", "fake_expert_or_doctor",
+      "celebrity_endorsement", "fake_media_branding", "fake_live_or_breaking_label",
+      "demographic_quiz", "ai_generated_imagery", "obfuscated_text"]},
+    "person": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "category_or_role", "source", "identity_basis", "requires_external_face_recognition"],
+      "properties": {
+        "name": {"$ref": "#/definitions/strOrNull"},
+        "category_or_role": {"anyOf": [{"$ref": "#/definitions/role"}, {"type": "null"}]},
+        "source": {"enum": ["visual", "text", "both"]},
+        "identity_basis": {"$ref": "#/definitions/identityBasis"},
+        "requires_external_face_recognition": {"type": "boolean"}
+      }
+    },
+    "demographic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["person_ref", "skin_tone", "hair_color", "gender", "apparent_age_range"],
+      "properties": {
+        "person_ref": {"type": "string"},
+        "skin_tone": {"$ref": "#/definitions/strOrNull"},
+        "hair_color": {"$ref": "#/definitions/strOrNull"},
+        "gender": {"$ref": "#/definitions/strOrNull"},
+        "apparent_age_range": {"$ref": "#/definitions/strOrNull"}
+      }
+    }
+  },
+  "properties": {
+    "detected_language": {"$ref": "#/definitions/strOrNull"},
+    "extracted_text_verbatim": {"type": "string"},
+    "core_narrative": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ad_goal_scam_type", "narrative_pattern", "promise_and_mechanism", "call_to_action",
+                   "topic", "keywords", "persuasion_devices"],
+      "properties": {
+        "ad_goal_scam_type": {"$ref": "#/definitions/scamType"},
+        "narrative_pattern": {"type": "string"},
+        "promise_and_mechanism": {"type": "string"},
+        "call_to_action": {"type": "string"},
+        "topic": {"$ref": "#/definitions/topic"},
+        "keywords": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
+        "persuasion_devices": {"type": "array", "items": {"$ref": "#/definitions/persuasionDevice"}}
+      }
+    },
+    "entities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["featured_people", "companies_or_institutions", "product_or_platform",
+                   "impersonated_media", "amounts_dates_locations"],
+      "properties": {
+        "featured_people": {"type": "array", "items": {"$ref": "#/definitions/person"}},
+        "companies_or_institutions": {"$ref": "#/definitions/strArray"},
+        "product_or_platform": {
+          "type": "object", "additionalProperties": false,
+          "required": ["exact_name", "generic_category"],
+          "properties": {"exact_name": {"$ref": "#/definitions/strOrNull"},
+                         "generic_category": {"$ref": "#/definitions/strOrNull"}}
+        },
+        "impersonated_media": {"$ref": "#/definitions/strArray"},
+        "amounts_dates_locations": {
+          "type": "object", "additionalProperties": false,
+          "required": ["amounts", "dates", "locations"],
+          "properties": {"amounts": {"$ref": "#/definitions/strArray"},
+                         "dates": {"$ref": "#/definitions/strArray"},
+                         "locations": {"$ref": "#/definitions/strArray"}}
+        }
+      }
+    },
+    "visual_and_production": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ad_creative_template", "landing_page_template", "funnel_stages",
+                   "setting_and_props", "visible_logos_and_badges"],
+      "properties": {
+        "ad_creative_template": {"$ref": "#/definitions/adTemplate"},
+        "landing_page_template": {"$ref": "#/definitions/landingTemplate"},
+        "funnel_stages": {"type": "array", "items": {"$ref": "#/definitions/funnelStage"}},
+        "setting_and_props": {"$ref": "#/definitions/strArray"},
+        "visible_logos_and_badges": {"$ref": "#/definitions/strArray"}
+      }
+    },
+    "non_grouping_attributes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unidentified_people_demographics"],
+      "properties": {"unidentified_people_demographics": {"type": "array", "items": {"$ref": "#/definitions/demographic"}}}
+    },
+    "technical_artifacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues",
+                   "domain_and_cert_metadata", "ad_library_metadata"],
+      "properties": {
+        "urls_and_domains": {"$ref": "#/definitions/strArray"},
+        "redirect_chain": {"$ref": "#/definitions/strArray"},
+        "tracker_ids": {"$ref": "#/definitions/strArray"},
+        "dom_and_form_clues": {"$ref": "#/definitions/strArray"},
+        "domain_and_cert_metadata": {"$ref": "#/definitions/strArray"},
+        "ad_library_metadata": {
+          "type": "object", "additionalProperties": false,
+          "required": ["page_id_or_name", "payer_name", "dates_active"],
+          "properties": {"page_id_or_name": {"$ref": "#/definitions/strOrNull"},
+                         "payer_name": {"$ref": "#/definitions/strOrNull"},
+                         "dates_active": {"$ref": "#/definitions/strOrNull"}}
+        }
+      }
+    },
+    "canonical_comparison_text": {"type": "string", "minLength": 20}
+  }
+}

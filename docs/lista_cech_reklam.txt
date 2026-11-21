@@ -1,0 +1,112 @@
+LISTA CECH REKLAM (PORÓWNYWANIE, GRUPOWANIE, ALTERNATYWY)
+=========================================================
+
+1. CECHY SEMANTYCZNE I NARRACYJNE (RDZEŃ KAMPANII)
+---------------------------------------------------------
+Zasada: Stanowią bazę bezpiecznika rdzenia. Nie zmieniać ich znaczenia.
+
+- Cel reklamy / typ oszustwa
+  Przykłady: fałszywa inwestycja, cudowny lek, phishing bankowy, fałszywy konkurs, dezinformacja
+  Grupowanie: Rdzeń (wysoka waga)
+  Alternatywy: NIE
+
+- Schemat narracji / motyw przewodni
+  Przykłady: "wyciekło nagranie z wywiadu", "rząd/lekarze ukrywają prawdę", "aresztowanie celebryty", "nowy program wypłat"
+  Grupowanie: Rdzeń (wysoka waga)
+  Alternatywy: TYLKO PARAFRAZA (inne słowa, ten sam sens)
+
+- Obietnica i mechanizm działania
+  Przykłady: "wpłać 1000 zł, zarabiaj 5000 zł tygodniowo", "jedna kapsułka usuwa cukrzycę"
+  Grupowanie: Rdzeń (wysoka waga)
+  Alternatywy: TYLKO PARAFRAZA / drobna zmiana liczb
+
+- Wezwanie do działania (CTA)
+  Przykłady: "zarejestruj się", "zostaw numer telefonu", "kliknij zanim usuną", "odbierz dopłatę"
+  Grupowanie: Wspierające (średnia waga)
+  Alternatywy: TAK (synonimy CTA)
+
+- Tematyka i słowa kluczowe
+  Przykłady: finanse/krypto, zdrowie/stawy, energetyka, polityka + 5-10 kluczowych fraz
+  Grupowanie: Rdzeń / wspierające
+  Alternatywy: CZĘŚCIOWO (wymiana nazw własnych na synonimy branżowe)
+
+
+2. CECHY PODMIOTOWE / ENCJE (GŁÓWNY CEL ALTERNATYW)
+---------------------------------------------------------
+Zasada: Biorą udział w grupowaniu oryginałów i stanowią główne sloty do mutacji.
+
+- Wykorzystana osoba / wizerunek
+  Przykłady: konkretna osoba z bazy referencyjnej (polityk, dziennikarz, sportowiec) lub rola ("lekarz", "prawnik") - wykorzystać bibliotekę DeepFace jeżeli LLM nie będzie chciał podać tożsamości osoby
+  Grupowanie: Wysoka waga
+  Alternatywy: TAK - Priorytet 1 (podmiana na inną osobę z tej samej kategorii)
+
+- Reklamowana lub podszywana firma / instytucja
+  Przykłady: Orlen, PKO BP, KGHM, PGE, NFZ, Ministerstwo Finansów, sieć handlowa
+  Grupowanie: Wysoka waga
+  Alternatywy: TAK - Priorytet 1 (podmiana na inną firmę z tej samej branży)
+
+- Nazwa reklamowanego produktu / platformy
+  Przykłady: "Baltic Pipe Profit", "Quantum AI", "CardioActive", "Polski Gaz Plus"
+  Grupowanie: Bardzo wysoka waga
+  Alternatywy: TAK - Priorytet 2 (podmiana nazwy lub token ogólny [PRODUKT])
+
+- Podszywane medium / portal informacyjny
+  Przykłady: TVP Info, Onet, Fakt, TVN24, WP, układ gazety lub programu śniadaniowego
+  Grupowanie: Wysoka waga
+  Alternatywy: TAK - Priorytet 1 (podmiana na inne popularne medium)
+
+- Konkretne kwoty, daty i lokalizacje
+  Przykłady: "1000 zł", "od 1 listopada", "dla mieszkańców Polski / województwa"
+  Grupowanie: Niska waga
+  Alternatywy: TAK - Priorytet 2 (zmiana/skalowanie wartości)
+
+
+3. CECHY WIZUALNE I PRODUKCYJNE (SZABLON KREACJI)
+---------------------------------------------------------
+Zasada: Szablon łączy kampanię; rekwizyty podlegają mutacji.
+
+- Sceneria i rekwizyty w tle
+  Przykłady: studio TV, sala sądowa, gabinet lekarski, marka samochodu, banknoty, kajdanki, wykres giełdowy
+  Grupowanie: Średnia-niska waga (tylko wzmacniająca)
+  Alternatywy: TAK - Priorytet 1 (podmiana obiektu, marki auta lub tła)
+
+- hash wizualny układu
+  Przykłady: pHash/dHash (duplikaty), wektor CLIP całej grafiki
+  Grupowanie: Wysoka waga
+  Alternatywy: LEKKIE AUGMENTACJE (zamaskowanie twarzy, zmiana kontrastu/kadru)
+
+
+4. CECHY TECHNICZNE I INFRASTRUKTURALNE (TWARDE ŚLADY)
+---------------------------------------------------------
+Zasada: Nigdy nie mutować. Służą jako twarde kotwice łączące kampanię.
+
+- Identyfikatory trackerów w kodzie strony
+  Przykłady: Meta Pixel ID, Google Analytics / GTM ID, TikTok Pixel
+  Siła dowodowa: Ekstremalnie wysoka
+
+- Struktura strony docelowej (DOM)
+  Przykłady: hash drzewa tagów HTML, nazwy pól formularza, wspólne nazwy skryptów JS/CSS
+  Siła dowodowa: Bardzo wysoka
+
+- Domena i łańcuch przekierowań
+  Przykłady: domena docelowa, domeny pośrednie, wzorzec ścieżki URL i parametrów (np. utm_campaign)
+  Siła dowodowa: Bardzo wysoka
+
+- Metadane domeny i certyfikatów
+  Przykłady: data rejestracji, powiązane domeny w certyfikacie SSL (SAN), unikalne serwery DNS (NS), dedykowane IP
+  Siła dowodowa: Średnia-wysoka (ważona rzadkością)
+
+- Metadane z biblioteki reklam
+  Przykłady: ID strony/fanpage'a publikującego reklamę, zbieżność dat wystąpienia, nazwa płatnika
+  Siła dowodowa: Wysoka
+
+
+5. CECHY WYKLUCZONE (WAGA = 0 W GRUPOWANIU)
+---------------------------------------------------------
+Zasada: Nie mogą tworzyć grup ani wpływać na podobieństwo.
+
+- Cechy demograficzne nierozpoznanych osób:
+  kolor skóry, kolor włosów, płeć, przybliżony wiek przypadkowego modela/statysty.
+
+- Powszechna infrastruktura masowa:
+  sam fakt korzystania z Cloudflare, AWS, Google Cloud lub najpopularniejszego rejestratora domen.

@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "variant.schema.json",
+  "title": "Alternatives generator output (prompts/alternatives.txt)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["parent_ad_id", "generation_notes", "variants"],
+  "definitions": {
+    "slot": {"enum": [
+      "entities.featured_people", "entities.companies_or_institutions", "entities.impersonated_media",
+      "visual_and_production.setting_and_props",
+      "non_grouping_attributes.unidentified_people_demographics",
+      "entities.product_or_platform", "entities.amounts_dates_locations",
+      "core_narrative.call_to_action", "core_narrative.keywords"]},
+    "strategy": {"enum": ["same_category_swap", "same_industry_swap", "same_market_swap", "prop_swap",
+      "demographic_change", "product_generalization", "value_shift", "cta_synonym", "keyword_generalization"]},
+    "variant": {
+      "type": "object",
+      "required": ["variant_index", "synthetic", "mutation_depth_k", "k_achieved", "mutated_fields",
+                   "mutation_log", "detected_language", "edited_source_text", "text_patches",
+                   "core_narrative", "entities", "visual_and_production", "non_grouping_attributes",
+                   "canonical_comparison_text"],
+      "properties": {
+        "variant_index": {"type": "integer", "minimum": 1},
+        "synthetic": {"const": true},
+        "mutation_depth_k": {"type": "integer", "minimum": 1},
+        "k_achieved": {"type": "integer", "minimum": 0},
+        "mutated_fields": {"type": "array", "items": {"$ref": "#/definitions/slot"}, "uniqueItems": true},
+        "mutation_log": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["field", "original_value", "new_value", "strategy"],
+            "properties": {"field": {"$ref": "#/definitions/slot"},
+                           "original_value": {}, "new_value": {},
+                           "strategy": {"$ref": "#/definitions/strategy"}}
+          }
+        },
+        "detected_language": {"type": ["string", "null"]},
+        "edited_source_text": {"type": ["string", "null"]},
+        "text_patches": {
+          "type": "array",
+          "items": {"type": "object", "required": ["original_span", "replacement"],
+                    "properties": {"original_span": {"type": "string", "minLength": 1},
+                                   "replacement": {"type": "string"}}}
+        },
+        "core_narrative": {"type": "object"},
+        "entities": {"type": "object"},
+        "visual_and_production": {"type": "object"},
+        "non_grouping_attributes": {"type": "object"},
+        "canonical_comparison_text": {"type": "string", "minLength": 20}
+      },
+      "not": {"required": ["technical_artifacts"]}
+    }
+  },
+  "properties": {
+    "parent_ad_id": {"type": "string"},
+    "generation_notes": {"type": "array", "items": {"type": "string"}},
+    "variants": {"type": "array", "items": {"$ref": "#/definitions/variant"}}
+  }
+}

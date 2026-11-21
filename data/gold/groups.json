@@ -1,0 +1,203 @@
+{
+  "schema_version": "0.1-draft",
+  "status": "DRAFT v2 (public version). Labels only: group membership, levels, scam types and ranking constraints. The detailed evidence notes (page excerpts, domains, tracker IDs) come from the organiser's sample data and live in groups.local.json, which is gitignored; ask the author for it. Reviewed by the project owner on 2026-11-21 for cases 36, 5, 1, 2, 3; the other two team members still need to review.",
+  "how_to_use": "Groups may overlap (a case can belong to several). Each group has a level that says how strong the relation is. Strict evaluation = same_campaign + same_template groups. Broad evaluation = strict + same_scheme. 'ranking_triples' are order constraints that stay meaningful with so few cases: for each, similarity(anchor, closer) must be greater than similarity(anchor, farther).",
+  "relation_levels": {
+    "same_campaign": "Identical content and/or identical technical anchors (same pixel, same article text). Only the domain or capture differs.",
+    "same_template": "Same layout, headline and mechanics, but different surface elements (people, dates, platform name, amounts).",
+    "same_scheme": "Same scam blueprint (hook -> offer type -> persuasion mechanics), different template and surface."
+  },
+  "case_ids": [
+    "1",
+    "2",
+    "3",
+    "5",
+    "10",
+    "14",
+    "36",
+    "47",
+    "48",
+    "61"
+  ],
+  "cases": {
+    "1": {
+      "scam_type": "fake_investment",
+      "topic": "finance_crypto",
+      "confidence": "high",
+      "media": [
+        "Gazeta.pl",
+        "Polsat News"
+      ]
+    },
+    "2": {
+      "scam_type": "fake_investment",
+      "topic": "finance_crypto",
+      "confidence": "high",
+      "media": [
+        "Gazeta.pl",
+        "TVN24"
+      ]
+    },
+    "3": {
+      "scam_type": "fake_investment",
+      "topic": "finance_crypto",
+      "confidence": "medium",
+      "media": [
+        "TVN24"
+      ]
+    },
+    "5": {
+      "scam_type": "miracle_cure",
+      "topic": "health",
+      "confidence": "high",
+      "media": []
+    },
+    "10": {
+      "scam_type": "fake_online_casino",
+      "topic": "gambling",
+      "confidence": "high",
+      "media": [
+        "TVN24"
+      ]
+    },
+    "14": {
+      "scam_type": "miracle_cure",
+      "topic": "health",
+      "confidence": "high",
+      "media": []
+    },
+    "36": {
+      "scam_type": "other",
+      "topic": "finance_crypto",
+      "confidence": "medium",
+      "needs_review": true,
+      "media": []
+    },
+    "47": {
+      "scam_type": "miracle_cure",
+      "topic": "health",
+      "confidence": "high",
+      "media": []
+    },
+    "48": {
+      "scam_type": "fake_investment",
+      "topic": "finance_crypto",
+      "confidence": "high",
+      "media": [
+        "TVN24",
+        "Wyborcza.pl"
+      ]
+    },
+    "61": {
+      "scam_type": "fake_investment",
+      "topic": "finance_crypto",
+      "confidence": "high",
+      "media": [
+        "TVN24"
+      ]
+    }
+  },
+  "groups": [
+    {
+      "id": "g_brzoska_article",
+      "level": "same_campaign",
+      "members": [
+        "1",
+        "2"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "g_37min_template",
+      "level": "same_template",
+      "members": [
+        "48",
+        "61"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "g_vsl_health_template",
+      "level": "same_template",
+      "members": [
+        "14",
+        "47"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "f_news_hook_investment",
+      "level": "same_scheme",
+      "members": [
+        "1",
+        "2",
+        "3",
+        "48",
+        "61"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "f_health_fake_expert",
+      "level": "same_scheme",
+      "members": [
+        "5",
+        "14",
+        "47"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "possible_members": [],
+  "singletons": [
+    "10",
+    "36"
+  ],
+  "ranking_triples": [
+    {
+      "anchor": "1",
+      "closer": "2",
+      "farther": "48",
+      "reason": "identical article vs same scheme only"
+    },
+    {
+      "anchor": "48",
+      "closer": "61",
+      "farther": "10",
+      "reason": "same template vs different scam type that only shares the TVN24 branding"
+    },
+    {
+      "anchor": "48",
+      "closer": "61",
+      "farther": "47",
+      "reason": "same template vs different topic"
+    },
+    {
+      "anchor": "1",
+      "closer": "48",
+      "farther": "47",
+      "reason": "same investment scheme vs health scheme"
+    },
+    {
+      "anchor": "14",
+      "closer": "47",
+      "farther": "10",
+      "reason": "same video-sales template vs casino ad"
+    },
+    {
+      "anchor": "47",
+      "closer": "14",
+      "farther": "5",
+      "reason": "same page template vs ad-only health case"
+    },
+    {
+      "anchor": "5",
+      "closer": "47",
+      "farther": "10",
+      "reason": "same health scheme vs casino"
+    }
+  ],
+  "open_questions": [
+    "See groups.local.json for the open questions (case 36 enum value, what the second capture of case 2 represents, case 3 platform name)."
+  ]
+}
