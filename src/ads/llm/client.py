@@ -17,7 +17,8 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-Part = Tuple[str, str]  # ("text", content) or ("image", path)
+Part = Tuple[str, str]  # ("text", content), ("image", path) or ("audio", path)
+AUDIO_MIME = {".mp3": "audio/mp3", ".ogg": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".aac": "audio/aac"}
 
 
 def load_env(path: Optional[str] = None) -> None:
@@ -44,8 +45,8 @@ def image_bytes(path: str, max_side: int = 1600) -> Tuple[bytes, str]:
 
 
 class LLMClient:
-    def __init__(self, model: str, cache_dir: str, max_retries: int = 2, temperature: float = 0.0):
-        self.model, self.max_retries, self.temperature = model, max_retries, temperature
+    def __init__(self, model: str, cache_dir: str, max_retries: int = 2, temperature: float = 0.0, json_mode: bool = True):
+        self.model, self.max_retries, self.temperature, self.json_mode = model, max_retries, temperature, json_mode
         self.cache_dir = cache_dir if os.path.isabs(cache_dir) else os.path.join(REPO_ROOT, cache_dir)
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -56,11 +57,11 @@ class LLMClient:
     # -- shared ----------------------------------------------------------------------
     def _key(self, system: str, parts: List[Part]) -> str:
         h = hashlib.sha256()
-        h.update(f"{type(self).__name__}|{self.model}|{self.temperature}|".encode())
+        h.update(f"{type(self).__name__}|{self.model}|{self.temperature}|{self.json_mode}|".encode())
         h.update(system.encode())
         for kind, val in parts:
             h.update(kind.encode())
-            h.update(open(val, "rb").read() if kind == "image" else val.encode())
+            h.update(open(val, "rb").read() if kind in ("image", "audio") else val.encode())
         return h.hexdigest()
 
     def generate_text(self, system: str, parts: List[Part], use_cache: bool = True) -> str:
@@ -118,13 +119,16 @@ class GeminiClient(LLMClient):
             if kind == "image":
                 data, mime = image_bytes(val)
                 contents.append(types.Part.from_bytes(data=data, mime_type=mime))
+            elif kind == "audio":
+                contents.append(types.Part.from_bytes(data=open(val, "rb").read(),
+                                                      mime_type=AUDIO_MIME[os.path.splitext(val)[1].lower()]))
             else:
                 contents.append(types.Part.from_text(text=val))
         r = self._client.models.generate_content(
             model=self.model, contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=system, response_mime_type="application/json",
-                temperature=self.temperature))
+                system_instruction=system, temperature=self.temperature,
+                **({"response_mime_type": "application/json"} if self.json_mode else {})))
         return "".join(p.text for p in r.candidates[0].content.parts if getattr(p, "text", None))
 
 
@@ -139,11 +143,11 @@ class MockClient(LLMClient):
         return self.responses.pop(0)
 
 
-def make_client(model_key: str = "extraction_model", **overrides) -> LLMClient:
+def make_client(model_key: str = "extraction_model", json_mode: bool = True, **overrides) -> LLMClient:
     load_env()
     cfg = {**load_config(), **overrides}
     provider = cfg.get("provider", "gemini")
     if provider == "gemini":
-        return GeminiClient(cfg[model_key], cfg["cache_dir"], cfg.get("max_retries", 2),
+        return GeminiClient(cfg[model_key], cfg["cache_dir"], cfg.get("max_retries", 2), json_mode=json_mode,
                             api_key_env=cfg.get("api_key_env", "GEMINI_API_KEY"))
     raise ValueError(f"unknown provider: {provider}")

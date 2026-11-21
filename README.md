@@ -29,7 +29,7 @@ If a model's quota is exhausted, pass another with `--model` (e.g. `gemini-3.8-f
 ## Sample data (not in the repo)
 The organiser's samples must not be redistributed publicly. Put them in `data/raw/do_udostępnienia/`.
 Everything derived from them (`data/cases/*/`, generated fixtures, `data/gold/*.local.json`) is gitignored.
-Per case, a `data/cases/<id>/manifest.json` lists the files (see the docstring of `assemble.py`).
+Per case, a `data/cases/<id>/manifest.json` lists the files (see the docstring of `assemble.py`). Set `"transcribe": true` in a manifest to transcribe video audio through the LLM (needs no Whisper; ffmpeg comes from `imageio-ffmpeg`).
 
 ## Run
 ```

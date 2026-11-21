@@ -13,3 +13,4 @@ pyyaml
 pytest
 streamlit                   # demonstrator (src/ads/app.py)
 requests                    # optional URL fetch in the demo
+imageio-ffmpeg              # bundled ffmpeg for audio extraction (src/ads/preprocess/transcribe.py)

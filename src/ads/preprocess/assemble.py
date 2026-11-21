@@ -14,7 +14,8 @@ manifest.json (paths relative to the repo's data/ directory, forward slashes):
   ],
   "hars": ["raw/.../a.har"],            # funnel order; may be empty
   "identities": [ ... ],                # optional manual resolved_identities
-  "transcribe": false                   # run faster-whisper on video parts (default false)
+  "transcribe": false,                  # transcribe video audio via the LLM (default false)
+  "transcribe_model": null              # model for transcription (default: the extraction model)
 }
 Roles: ad_creative | bridge_page | offer_page | decoy_page. The result is validated against
 schemas/case_input.schema.json. Manifests contain file names of the organiser's samples, so
@@ -57,7 +58,7 @@ def rel(path: str) -> str:
     return os.path.relpath(path, DATA).replace(os.sep, "/")
 
 
-def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool) -> Dict[str, Any]:
+def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool, model: str = None) -> Dict[str, Any]:
     part: Dict[str, Any] = {"role": spec["role"], "source_files": []}
     images: List[str] = list(spec.get("images", []))
     part["source_files"] += images
@@ -77,10 +78,13 @@ def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool) 
         sheet = os.path.join(case_dir, f"contact_sheet_{idx}.jpg")
         videomod.make_contact_sheet(videomod.pick_keyframes(samples), sheet)
         images.append(rel(sheet))
-        if transcribe:
-            transcript, _segs, note = videomod.transcribe(vpath, "small", "pl")
-            if note:
-                part["notes"] = note
+        if transcribe:  # speech-to-text through the LLM's audio input (src/ads/preprocess/transcribe.py)
+            try:
+                from .transcribe import transcribe_video
+                transcript = transcribe_video(vpath, os.path.join(case_dir, f"audio_{idx}.mp3"),
+                                              spec.get("transcribe_model") or model) or None
+            except Exception as e:  # noqa: BLE001
+                part["notes"] = f"transcription failed: {str(e)[:150]}"
     part["medium"] = "video" if spec.get("video") else ("html" if spec.get("html") else
                                                         ("image" if images else "text"))
     part["text"] = text
@@ -93,7 +97,7 @@ def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool) 
 def assemble(case_id: str) -> Dict[str, Any]:
     case_dir = os.path.join(CASES, case_id)
     m = json.load(open(os.path.join(case_dir, "manifest.json"), encoding="utf-8"))
-    parts = [build_part(case_dir, i, s, m.get("transcribe", False)) for i, s in enumerate(m["parts"])]
+    parts = [build_part(case_dir, i, s, m.get("transcribe", False), m.get("transcribe_model")) for i, s in enumerate(m["parts"])]
     tech = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [],
             "dom_and_form_clues": [], "domain_and_cert_metadata": []}
     for h in m.get("hars", []):
