@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import streamlit as st  # noqa: E402
 
+from ads import analyze as an  # noqa: E402
 from ads import clustering as clu  # noqa: E402
-from ads import decision as dec  # noqa: E402
 from ads import dedup  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
 from ads.paths import CASES, gold_file  # noqa: E402
@@ -78,24 +78,15 @@ def show_profile(p):
 
 STATUS_BOX = {"duplicate": st.success, "same_content": st.success, "confirmed": st.success, "likely": st.info,
               "suggested_family": st.warning, "new_unconfirmed": st.warning}
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 
 
-def compute_decision(profile, db, tau, dups=None):
-    """Compare with the database (no rendering): returns (neighbour result, graded decision)."""
-    res = clu.assign(profile, db, tau, variants=VARIANTS)
-    return res, dec.decide(res["neighbours"], dups or [], likely=tau)
-
-
-def show_neighbours(profile, db, tau, dups=None):
-    res, decision = compute_decision(profile, db, tau, dups)
-    return render_neighbours(res, decision, db, tau, dups)
-
-
-def render_neighbours(res, decision, db, tau, dups=None):
-    """Show the graded decision and the closest cases, return the decision."""
-    STATUS_BOX[decision["status"]](f"**{decision['title']}**  \n{decision['explanation']}")
-    if dups:
-        st.caption("Duplicate check: " + "; ".join(f"case {d['case']}: {', '.join(d['reasons'])}" for d in dups))
+def render_comparison(res, db, tau):
+    """Show the graded decision and the closest cases (res comes from analyze.compare or analyze.analyse)."""
+    d = res["decision"]
+    STATUS_BOX[d["status"]](f"**{d['title']}**  \n{d['explanation']}")
+    if res["duplicates"]:
+        st.caption("Duplicate check: " + "; ".join(f"case {x['case']}: {', '.join(x['reasons'])}" for x in res["duplicates"]))
     for cid, r in res["neighbours"]:
         with st.expander(f"{label(cid, db[cid])}  —  score {r['score']:.2f}", expanded=r["score"] >= tau):
             if r["strong_links"]:
@@ -103,76 +94,19 @@ def render_neighbours(res, decision, db, tau, dups=None):
             top = sorted(r["contributions"].items(), key=lambda x: -x[1])
             st.markdown("**Why similar (weighted contribution):** " + ", ".join(f"{k} {v:.2f}" for k, v in top if v > 0) or "-")
             st.caption("Not comparable (missing on one side): " + (", ".join(r["missing"]) or "-"))
-    return decision
 
 
-def save_case(case, profile, decision=None):
-    """Persist a scanned case as data/cases/web_<n>/ so it joins the database (gitignored directory)."""
-    import shutil
-    base = CASES
-    n = 1
-    while os.path.exists(os.path.join(base, f"web_{n}")):
-        n += 1
-    cid = f"web_{n}"
-    d = os.path.join(base, cid)
-    os.makedirs(d)
-    case = json.loads(json.dumps(case))
-    case["case_id"] = cid
-    for part in case["parts"]:
-        saved = []
-        for img in part.get("images", []):
-            shutil.copy(img, os.path.join(d, os.path.basename(img)))
-            saved.append(f"cases/{cid}/{os.path.basename(img)}")
-        part["images"] = saved
-    json.dump(case, open(os.path.join(d, "case_input.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    json.dump(profile, open(os.path.join(d, "profile.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    status = (decision or {}).get("status")
-    meta = {"decision": status}
-    if status == "duplicate":
-        meta["duplicate_of"] = decision["join"][0]
-    elif status in ("new_unconfirmed", "suggested_family", "likely"):
-        meta["status"] = "unconfirmed"      # an analyst confirms it later (Campaigns tab)
-    json.dump(meta, open(os.path.join(d, "meta.json"), "w", encoding="utf-8"))
-    database.clear()
-    fingerprints.clear()
-    return cid
-
-
-def build_case(files, url, text, product):
-    """Turn user input into an in-memory case_input (images + page text)."""
-    parts, tmp = [], tempfile.mkdtemp()
-    images = []
+def save_uploads(files):
+    """Write uploaded files to a temporary folder; returns (screenshot paths, HTML page paths)."""
+    tmp, images, pages = tempfile.mkdtemp(), [], []
     for f in files or []:
         path = os.path.join(tmp, f.name)
         open(path, "wb").write(f.getbuffer())
-        if f.name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        if f.name.lower().endswith(IMAGE_EXT):
             images.append(path)
         elif f.name.lower().endswith((".html", ".htm")):
-            from ads.preprocess.assemble import html_to_text
-            parts.append({"role": "bridge_page", "medium": "html", "text": html_to_text(path), "images": []})
-    if images:
-        parts.insert(0, {"role": "ad_creative", "medium": "image", "text": None, "images": images})
-    page_text = text or ""
-    scan = None
-    if url:
-        from ads.preprocess.url_scan import scan_url
-        scan = scan_url(url)
-        if scan["ok"]:
-            page_text += chr(10) + scan["text"]
-            for n in scan["notes"]:
-                st.info(f"URL scan: {n}")
-        else:
-            st.warning(f"Could not scan the URL ({scan['error']}); using the other inputs.")
-            scan = None
-    if product:
-        page_text = f"Product or platform named by the analyst: {product}\n" + page_text
-    if page_text.strip():
-        parts.append({"role": "bridge_page" if images else "offer_page", "medium": "text", "text": page_text.strip(), "images": []})
-    if not parts:
-        return None
-    tech = scan["technical_summary"] if scan else {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [],
-                                                  "dom_and_form_clues": [], "domain_and_cert_metadata": []}
-    return {"schema_version": "1.0", "case_id": "new", "parts": parts, "technical_summary": tech, "resolved_identities": []}
+            pages.append(path)
+    return images, pages
 
 
 db = database()
@@ -208,8 +142,7 @@ with tab1:
         st.subheader("Most similar cases")
         rest = {k: v for k, v in db.items() if k != cid}
         fps = fingerprints()
-        dups = dedup.find_duplicates(fps[cid], {k: v for k, v in fps.items() if k != cid}) if cid in fps else []
-        show_neighbours(db[cid], rest, tau, dups)
+        render_comparison(an.compare(db[cid], fps.get(cid), rest, tau, VARIANTS, fps), db, tau)
     else:
         files = st.file_uploader("Ad screenshot(s) and/or saved HTML page", accept_multiple_files=True,
                                  type=["png", "jpg", "jpeg", "webp", "html", "htm"])
@@ -226,9 +159,9 @@ with tab1:
         if "new_profile" in st.session_state:
             # a result is on screen: the Save button sits right next to Analyse
             prof = st.session_state["new_profile"]
-            dups = dedup.find_duplicates(dedup.fingerprint(st.session_state["new_case"]), fingerprints())
-            res, decision = compute_decision(prof, db, tau, dups)
-            pending = (prof, res, decision, dups)
+            res = an.compare(prof, dedup.fingerprint(st.session_state["new_case"]), db, tau, VARIANTS, fingerprints())
+            decision = res["decision"]
+            pending = (prof, res)
             if st.session_state.get("saved_id"):
                 c_save.success(f"Saved as {st.session_state['saved_id']} (local data/cases/, not shared via git)")
             else:
@@ -236,10 +169,15 @@ with tab1:
                 lbl = f"Save as duplicate of case {decision['join'][0]}" if dup else "Save to database"
                 if c_save.button(lbl, help="Adds this scan to the database so later cases are compared with it. "
                                            "New or uncertain campaigns are saved as unconfirmed."):
-                    st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof, decision)
+                    st.session_state["saved_id"] = an.save_case(st.session_state["new_case"], prof, decision)
+                    database.clear()
+                    fingerprints.clear()
                     st.rerun()
         if analyse:
-            case = build_case(files, url, text, product)
+            images, pages = save_uploads(files)
+            case, notes = an.build_case(url, text, images, pages, product, text_role="bridge_page" if images else "offer_page")
+            for note in notes:
+                st.info(f"URL scan: {note}")
             done = False
             if not case:
                 st.error("Give at least a screenshot, a URL, some text or a product name.")
@@ -247,9 +185,8 @@ with tab1:
                 with st.spinner("Extracting features with the LLM (cached after the first run)..."):
                     try:
                         from ads.llm.client import make_client
-                        from ads.llm.extract import extract
                         client = make_client() if model.startswith("auto") else make_client(extraction_model=model)
-                        st.session_state["new_profile"] = extract(case, client)
+                        st.session_state["new_profile"] = an.analyse(case, db, tau, client, VARIANTS, fingerprints())["profile"]
                         st.session_state["new_case"] = case
                         st.session_state.pop("saved_id", None)
                         done = True
@@ -262,10 +199,10 @@ with tab1:
             if done:
                 st.rerun()  # redraw so the Save button appears next to Analyse for the new result
         if pending and not analyse:
-            prof, res, decision, dups = pending
+            prof, res = pending
             show_profile(prof)
             st.subheader("Comparison with the database")
-            render_neighbours(res, decision, db, tau, dups)
+            render_comparison(res, db, tau)
 
 with tab2:
     scores = clu.pair_scores(db, VARIANTS)

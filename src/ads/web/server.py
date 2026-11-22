@@ -76,7 +76,7 @@ def groups_payload(state: State, tau: float) -> Dict[str, Any]:
 
 def analyze_payload(state: State, body: dict) -> Dict[str, Any]:
     tau = parse_tau(body.get("tau", 0.6))
-    case, notes = an.case_from_url(str(body.get("url") or ""), str(body.get("text") or ""))
+    case, notes = an.build_case(url=str(body.get("url") or ""), text=str(body.get("text") or ""))
     if case is None:
         raise ValueError("No article text: " + ("; ".join(notes) or "give a URL or paste the text") + ".")
     res = an.analyse(case, state.profiles, tau, state.llm())

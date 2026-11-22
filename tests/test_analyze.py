@@ -17,15 +17,33 @@ DB = {
 }
 
 
-def test_case_from_pasted_text_only():
-    case, notes = an.case_from_url("", "Artykuł o inwestycji w platformę.")
+def test_build_case_from_pasted_text_only():
+    case, notes = an.build_case(text="Artykuł o inwestycji w platformę.")
     assert case["parts"][0]["text"] == "Artykuł o inwestycji w platformę."
     assert case["parts"][0]["role"] == "bridge_page" and notes == []
-    assert an.case_from_url("", "   ") == (None, [])
+    assert an.build_case(text="   ") == (None, [])
+
+
+def test_build_case_roles_for_screenshots_pages_and_text(tmp_path):
+    page = tmp_path / "p.html"
+    page.write_text("<html><body><p>Artykuł o platformie.</p></body></html>", encoding="utf-8")
+    case, _ = an.build_case(text="Formularz", images=["ad.png"], html_files=[str(page)], product="AlphaPlat",
+                            text_role="offer_page")
+    assert [p["role"] for p in case["parts"]] == ["ad_creative", "bridge_page", "offer_page"]
+    assert case["parts"][0]["images"] == ["ad.png"] and "Artykuł o platformie" in case["parts"][1]["text"]
+    assert case["parts"][2]["text"].startswith("Product or platform named by the analyst: AlphaPlat")
+
+
+def test_compare_needs_no_llm_and_reports_capture_duplicates():
+    fp = {"images": [], "texts": [], "urls": ["https://example.test/landing"]}
+    r = an.compare(DB["a"], fp, {k: v for k, v in DB.items() if k != "a"}, 0.6,
+                   fingerprints={"b": fp, "c": {"images": [], "texts": [], "urls": []}})
+    assert r["decision"]["status"] == "duplicate" and r["duplicates"][0]["case"] == "b"
+    assert an.compare(DB["a"], None, DB, 0.6, fingerprints={})["duplicates"] == []
 
 
 def test_analyse_places_article_in_the_matching_campaign():
-    case, _ = an.case_from_url("", "Inwestuj w AlphaPlat, wpłać depozyt.")
+    case, _ = an.build_case(text="Inwestuj w AlphaPlat, wpłać depozyt.")
     client = MockClient([json.dumps(make(product="AlphaPlat"))])
     r = an.analyse(case, DB, 0.6, client, fingerprints={})
     assert r["llm_used"] and len(client.calls) == 1
@@ -35,7 +53,7 @@ def test_analyse_places_article_in_the_matching_campaign():
 
 
 def test_repeat_capture_reuses_stored_profile_without_llm():
-    case, _ = an.case_from_url("", "Inwestuj w AlphaPlat.")
+    case, _ = an.build_case(text="Inwestuj w AlphaPlat.")
     case["technical_summary"]["redirect_chain"] = ["https://example.test/landing"]
     fps = {"a": {"images": [], "texts": [], "urls": ["https://example.test/landing"]}}
     client = MockClient([])  # any LLM call would fail: no canned response
@@ -52,7 +70,7 @@ def test_groups_overview_separates_scam_types_and_lists_evidence():
 
 
 def test_save_case_writes_profile_and_unconfirmed_status(tmp_path):
-    case, _ = an.case_from_url("", "tekst")
+    case, _ = an.build_case(text="tekst")
     cid = an.save_case(case, DB["a"], {"status": "new_unconfirmed"}, cases_dir=str(tmp_path))
     assert cid == "web_1" and an.save_case(case, DB["a"], None, cases_dir=str(tmp_path)) == "web_2"
     meta = json.load(open(tmp_path / "web_1" / "meta.json", encoding="utf-8"))

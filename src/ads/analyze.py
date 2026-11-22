@@ -1,8 +1,15 @@
-"""Analyse one new article against the database, with no UI code (the panel calls this; tests use MockClient).
+"""Analyse new material against the database, with no UI code. The web panel and the Streamlit demo both use it.
 
-    case, notes = case_from_url("https://...", pasted_text="")
-    result = analyse(case, profiles, tau, client)       # profile, duplicates, neighbours, joins, decision, llm_used
-    groups = groups_overview(profiles, tau)              # campaigns with their family, members and linking evidence
+Three steps, each usable on its own:
+
+    case, notes = build_case(url="https://...", text="", images=[], html_files=[])   # material -> case_input
+    result = analyse(case, profiles, tau, client)    # duplicate check, LLM profile (skipped for a repeat), compare
+    result = compare(profile, fingerprint, profiles, tau)   # duplicates, nearest cases, campaigns joined, decision
+
+and for display and storage:
+
+    groups = groups_overview(profiles, tau)          # campaigns with their family, members and linking evidence
+    summary = case_summary(case_id, profile)         # one case, flattened for a card
     cid = save_case(case, result["profile"], result["decision"])
 """
 import json
@@ -10,7 +17,7 @@ import os
 import shutil
 from collections import Counter
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import clustering, decision, dedup
 from .paths import CASES, DATA
@@ -21,50 +28,82 @@ EMPTY_TECH = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [], "
 CAPTURE_REASONS = ("near-identical image", "same final URL")  # the same capture again (see decision.py)
 
 
-def case_from_url(url: str, pasted_text: str = "") -> Tuple[Optional[Dict[str, Any]], List[str]]:
-    """In-memory case_input for an article: the scanned page (text + technical traces) plus any pasted text.
+# ---------------------------------------------------------------- step 1: material -> case_input
 
-    Returns (None, notes) when there is no text at all. Pasted text helps when the page needs JavaScript or
-    shows reviewers a neutral page (cloaking)."""
+def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_files: Sequence[str] = (),
+               product: str = "", text_role: str = "bridge_page") -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """In-memory case_input from what an analyst has: a URL (scanned for text and technical traces), pasted text,
+    screenshot paths, saved HTML pages and a product name. Returns (None, notes) when nothing usable is given.
+
+    Screenshots become the ad creative, each HTML file a bridge page, and the scanned plus pasted text one more page
+    with role `text_role` (default: a bridge page, i.e. the fake article)."""
     notes: List[str] = []
-    text, tech = "", dict(EMPTY_TECH)
+    tech = dict(EMPTY_TECH)
+    page_text = text.strip()
     if url.strip():
         from .preprocess.url_scan import scan_url
         scan = scan_url(url.strip())
         if scan["ok"]:
-            text, tech = scan["text"], scan["technical_summary"]
+            page_text = "\n".join(t for t in (scan["text"], page_text) if t)
+            tech = scan["technical_summary"]
             notes += scan["notes"]
             if scan["final_url"].rstrip("/") != url.strip().rstrip("/"):
                 notes.append(f"redirected to {scan['final_url']}")
         else:
             notes.append(f"could not fetch the page: {scan['error']}")
-    text = "\n".join(t for t in (text, pasted_text.strip()) if t)
-    if not text:
+    if product.strip():
+        page_text = f"Product or platform named by the analyst: {product.strip()}\n" + page_text
+    parts: List[Dict[str, Any]] = []
+    if images:
+        parts.append({"role": "ad_creative", "medium": "image", "text": None, "images": list(images)})
+    if html_files:
+        from .preprocess.assemble import html_to_text
+        parts += [{"role": "bridge_page", "medium": "html", "text": html_to_text(p), "images": []} for p in html_files]
+    if page_text.strip():
+        parts.append({"role": text_role, "medium": "text", "text": page_text.strip(), "images": []})
+    if not parts:
         return None, notes
-    case = {"schema_version": "1.0", "case_id": "new",
-            "parts": [{"role": "bridge_page", "medium": "text", "text": text, "images": []}],
-            "technical_summary": tech, "resolved_identities": []}
-    return case, notes
+    return {"schema_version": "1.0", "case_id": "new", "parts": parts, "technical_summary": tech,
+            "resolved_identities": []}, notes
+
+
+# ---------------------------------------------------------------- steps 2 and 3: profile, comparison, decision
+
+def _database_fingerprints(profiles: Dict[str, dict], fingerprints: Optional[Dict[str, dict]]) -> Dict[str, dict]:
+    fps = fingerprints if fingerprints is not None else dedup.load_fingerprints()
+    return {k: v for k, v in fps.items() if k in profiles}
+
+
+def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], profiles: Dict[str, dict], tau: float,
+            variants: Optional[Dict[str, List[dict]]] = None,
+            fingerprints: Optional[Dict[str, dict]] = None) -> Dict[str, Any]:
+    """Compare a profile with the database (no LLM): duplicates of its capture, nearest cases, the campaigns it
+    joins and the graded decision. `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
+    `fingerprints` defaults to those of the cases on disk."""
+    dups = dedup.find_duplicates(fingerprint, _database_fingerprints(profiles, fingerprints)) if fingerprint else []
+    res = clustering.assign(profile, profiles, tau, variants=variants)
+    return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"],
+            "decision": decision.decide(res["neighbours"], dups, likely=tau)}
 
 
 def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=None,
             variants: Optional[Dict[str, List[dict]]] = None,
             fingerprints: Optional[Dict[str, dict]] = None) -> Dict[str, Any]:
-    """Duplicate check first; a repeat capture reuses the stored profile, so it costs no LLM call.
-    `fingerprints` defaults to those of the cases on disk (dedup.load_fingerprints)."""
-    fps = fingerprints if fingerprints is not None else dedup.load_fingerprints()
-    fps = {k: v for k, v in fps.items() if k in profiles}
-    dups = dedup.find_duplicates(dedup.fingerprint(case), fps)
-    repeat = next((d["case"] for d in dups if any(r.startswith(CAPTURE_REASONS) for r in d["reasons"])), None)
+    """Profile the case with the LLM and compare it. A repeat capture (same image or final URL as a database case)
+    reuses that case's profile, so it costs no LLM call. Returns compare()'s keys plus "profile" and "llm_used"."""
+    fps = _database_fingerprints(profiles, fingerprints)
+    fp = dedup.fingerprint(case)
+    repeat = next((d["case"] for d in dedup.find_duplicates(fp, fps)
+                   if any(r.startswith(CAPTURE_REASONS) for r in d["reasons"])), None)
     if repeat:
         profile = profiles[repeat]
     else:
         from .llm.extract import extract
         profile = extract(case, client)
-    res = clustering.assign(profile, profiles, tau, variants=variants)
-    return {"profile": profile, "duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"],
-            "decision": decision.decide(res["neighbours"], dups, likely=tau), "llm_used": not repeat}
+    return {"profile": profile, "llm_used": not repeat, **compare(profile, fp, profiles, tau, variants, fps)}
 
+
+# ---------------------------------------------------------------- display and storage
 
 def groups_overview(profiles: Dict[str, dict], tau: float, family_tau: float = decision.FAMILY_SCORE,
                     variants: Optional[Dict[str, List[dict]]] = None) -> List[Dict[str, Any]]:
