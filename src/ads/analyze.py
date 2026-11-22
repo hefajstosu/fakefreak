@@ -10,6 +10,7 @@ and for display and storage:
 
     groups = groups_overview(profiles, tau)          # campaigns with their family, members and linking evidence
     scores = pair_table(profiles)                    # the N x N pair table, reused between calls (see its docstring)
+    groups = campaigns(profiles, tau)                # campaigns at tau, reused while the database is unchanged
     summary = case_summary(case_id, profile)         # one case, flattened for a card
     cid = save_case(case, result["profile"], result["decision"])
 """
@@ -72,10 +73,24 @@ def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_f
 # ---------------------------------------------------------------- the pair table, reused between analyses
 
 _PAIRS: Dict[Tuple[str, ...], Dict[str, Any]] = {}  # (sha a, sha b, variants sha a, variants sha b) -> pair result
+_GROUPS: Dict[Tuple[Any, ...], List[List[str]]] = {}  # (tau, database content) -> campaigns
+_SHAS: Dict[int, Tuple[dict, str]] = {}               # id(profile) -> (profile, sha), for the current database
 
 
 def _sha(obj: Any) -> str:
     return hashlib.sha1(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _content_keys(profiles: Dict[str, dict], variants: Dict[str, List[dict]]) -> Dict[str, Tuple[str, str]]:
+    """{case id: (profile sha, variants sha)}. Profiles are never edited in place, so a profile object already
+    hashed in the previous call is not hashed again; only the current database is remembered."""
+    global _SHAS
+    seen = {}
+    for p in profiles.values():
+        old = _SHAS.get(id(p))
+        seen[id(p)] = old if old is not None and old[0] is p else (p, _sha(p))
+    _SHAS = seen
+    return {c: (seen[id(p)][1], _sha(variants[c]) if variants.get(c) else "") for c, p in profiles.items()}
 
 
 def pair_table(profiles: Dict[str, dict],
@@ -85,20 +100,32 @@ def pair_table(profiles: Dict[str, dict],
     analysis costs N new comparisons instead of N*(N-1)/2. Results keep only "score", "base", "via_variant" and
     "strong_links", which is all the grouping reads. The memory holds about twice the current table at most."""
     variants = variants or {}
-    shas = {c: _sha(p) for c, p in profiles.items()}
-    vshas = {c: _sha(variants[c]) if variants.get(c) else "" for c in profiles}
+    keys = _content_keys(profiles, variants)
     table = {}
     for a, b in combinations(sorted(profiles), 2):
-        key = (shas[a], shas[b], vshas[a], vshas[b])
+        key = keys[a] + keys[b]
         if key not in _PAIRS:
             r = clustering.best_score(profiles[a], profiles[b], variants.get(a), variants.get(b))
             _PAIRS[key] = {k: r[k] for k in ("score", "base", "via_variant", "strong_links")}
         table[(a, b)] = _PAIRS[key]
     if len(_PAIRS) > 2 * len(table) + 1000:  # drop pairs of profiles that are no longer in the database
-        live = {(shas[a], shas[b], vshas[a], vshas[b]) for a, b in table}
+        live = {keys[a] + keys[b] for a, b in table}
         for key in [k for k in _PAIRS if k not in live]:
             del _PAIRS[key]
     return table
+
+
+def campaigns(profiles: Dict[str, dict], tau: float,
+              variants: Optional[Dict[str, List[dict]]] = None) -> List[List[str]]:
+    """clustering.cluster(profiles, tau) over pair_table(), remembered while the database and tau stay the same:
+    analysing several articles in a row clusters the database once, and again only after a case is saved."""
+    keys = _content_keys(profiles, variants or {})
+    key = (tau, tuple(sorted((c,) + k for c, k in keys.items())))
+    if key not in _GROUPS:
+        if len(_GROUPS) >= 16:
+            _GROUPS.clear()
+        _GROUPS[key] = clustering.cluster(profiles, tau, pair_table(profiles, variants))
+    return [list(g) for g in _GROUPS[key]]
 
 
 # ---------------------------------------------------------------- steps 2 and 3: profile, comparison, decision
@@ -115,8 +142,7 @@ def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], prof
     joins and the graded decision. `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
     `fingerprints` defaults to those of the cases on disk."""
     dups = dedup.find_duplicates(fingerprint, _database_fingerprints(profiles, fingerprints)) if fingerprint else []
-    groups = clustering.cluster(profiles, tau, pair_table(profiles, variants))
-    res = clustering.assign(profile, profiles, tau, groups=groups, variants=variants)
+    res = clustering.assign(profile, profiles, tau, groups=campaigns(profiles, tau, variants), variants=variants)
     return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"],
             "decision": decision.decide(res["neighbours"], dups, likely=tau)}
 
@@ -144,11 +170,11 @@ def groups_overview(profiles: Dict[str, dict], tau: float, family_tau: float = d
                     variants: Optional[Dict[str, List[dict]]] = None) -> List[Dict[str, Any]]:
     """Campaigns at tau, largest family first; each with its family number, members and the evidence that links them."""
     scores = pair_table(profiles, variants)
-    campaigns = clustering.cluster(profiles, tau, scores)
+    groups = campaigns(profiles, tau, variants)
     out = []
-    for fam_no, family in enumerate(clustering.hierarchy(profiles, campaigns, family_tau, scores), 1):
+    for fam_no, family in enumerate(clustering.hierarchy(profiles, groups, family_tau, scores), 1):
         for ci in family:
-            members = campaigns[ci]
+            members = groups[ci]
             links = [{"a": a, "b": b, "score": clustering.pair(scores, a, b)["score"],
                       "evidence": clustering.pair(scores, a, b)["strong_links"]} for a, b in combinations(members, 2)]
             scam = Counter(profiles[c]["core_narrative"]["ad_goal_scam_type"] for c in members).most_common(1)[0][0]

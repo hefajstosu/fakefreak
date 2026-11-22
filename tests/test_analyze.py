@@ -100,3 +100,17 @@ def test_pair_table_matches_pair_scores_and_compares_each_pair_once(monkeypatch)
     assert calls == []                          # every pair is remembered
     an.pair_table({**DB, "d": make(product="Other")})
     assert len(calls) == 3                      # one new case: only its 3 pairs are scored
+
+
+def test_campaigns_are_clustered_once_per_database_state(monkeypatch):
+    from ads import clustering
+    an._PAIRS.clear()
+    an._GROUPS.clear()
+    calls = []
+    real = clustering.cluster
+    monkeypatch.setattr(clustering, "cluster", lambda *a, **k: calls.append(1) or real(*a, **k))
+    first = an.compare(make(), None, DB, 0.6, fingerprints={})
+    assert an.compare(make(), None, DB, 0.6, fingerprints={})["joins"] == first["joins"] and len(calls) == 1
+    an.compare(make(), None, {**DB, "d": make(product="Other")}, 0.6, fingerprints={})
+    an.compare(make(), None, DB, 0.5, fingerprints={})
+    assert len(calls) == 3                      # a saved case or another threshold clusters again
