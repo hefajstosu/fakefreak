@@ -122,7 +122,7 @@ def test_compare_explains_the_decision_and_every_campaign():
     r = an.compare(make(product="AlphaPlat"), None, DB, 0.6, fingerprints={})
     assert r["reasons"]["status"] == r["decision"]["status"] and r["reasons"]["thresholds"]["tau"] == 0.6
     rows = {tuple(c["members"]): c for c in r["campaigns"]}
-    assert rows[("a", "b")]["joined"] and rows[("a", "b")]["rule"] == "mean score >= tau"
+    assert rows[("a", "b")]["joined"] and rows[("a", "b")]["rule"] == "same content"  # near-identical synthetic profiles
     assert not rows[("c",)]["joined"] and rows[("c",)]["gap"] > 0
     g = {tuple(x["members"]): x["explanation"] for x in an.groups_overview(DB, 0.6)}
-    assert g[("a", "b")]["rule"] == "mean score" and g[("c",)]["nearest"]["members"] == ["a", "b"]
+    assert g[("a", "b")]["rule"] == "same content" and g[("c",)]["nearest"]["members"] == ["a", "b"]

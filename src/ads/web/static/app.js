@@ -274,7 +274,9 @@ const keyOf = (ids) => [...ids].sort().join("|");
 const RULE = {
   "single case": () => "Pojedyncza sprawa: nic w bazie nie łączy się z nią twardym dowodem ani średnim podobieństwem ≥ τ.",
   "hard evidence": () => "Wszystkie sprawy łączą twarde dowody (wspólny tracker, endpointy platformy lub strona sponsorująca). Taki dowód łączy sprawy niezależnie od podobieństwa treści.",
-  "hard evidence and mean score": (x) => `Części ${x.parts.map((p) => `[${p.join(", ")}]`).join(" i ")} łączą twarde dowody; części scalono, bo średnie podobieństwo między nimi (${f2(x.parts_mean)}) osiąga τ.`,
+  "same content": () => "Sprawy mają prawie identyczną treść (wynik pary ≥ 0.80): to ta sama reklama z podmienionymi szczegółami. Takie powiązanie łączy niezależnie od reszty kampanii.",
+  "hard evidence and same content": () => "Sprawy łączą twarde dowody albo prawie identyczna treść (wynik pary ≥ 0.80); takie powiązania łączą niezależnie od reszty kampanii.",
+  "hard evidence and mean score": (x) => `Części ${x.parts.map((p) => `[${p.join(", ")}]`).join(" i ")} łączą twarde dowody lub prawie identyczna treść; części scalono, bo średnie podobieństwo między nimi (${f2(x.parts_mean)}) osiąga τ.`,
   "mean score": (x) => `Brak twardych dowodów; sprawy połączono, bo średnie podobieństwo między nimi (${f2(x.parts_mean)}) osiąga τ.`,
 };
 
@@ -438,7 +440,11 @@ function hardSummary(row) {  // "sprawy 1, 2: <evidence>" with one line per dist
 }
 
 function campaignResult(row) {
-  if (row.joined) return row.rule === "hard evidence" ? "dołączono: twardy dowód" : "dołączono: średnia ≥ τ";
+  if (row.joined) {
+    if (row.rule === "hard evidence") return "dołączono: twardy dowód";
+    if (row.rule === "same content") return `dołączono: prawie ta sama treść co sprawa ${row.best.case} (${f2(row.best.score)} ≥ ${f2(lastResult?.thresholds?.confirm ?? 0.8)})`;
+    return "dołączono: średnia ≥ τ";
+  }
   return `nie dołączono: brakuje ${f2(row.gap)} do τ (najbliższa sprawa ${row.best.case}: ${f2(row.best.score)})`;
 }
 

@@ -69,3 +69,10 @@ def test_scanned_endpoint_paths_match_recorded_post_endpoints():
 def test_a_single_shared_generic_endpoint_is_not_evidence():
     a, b = make(clues=["api:/api/v1/users/"]), make(clues=["api:/api/v1/users/"])
     assert not any("endpoint" in s for s in score(a, b)["strong_links"])
+
+
+def test_technical_traces_missing_on_one_side_are_skipped_not_scored_zero():
+    a, b = make(tracker="meta_pixel:111", clues=["POST x.test/api/v1/a/"]), make()
+    r = score(a, b)
+    assert "tracker_ids" in r["missing"] and "dom_and_form_clues" in r["missing"] and r["score"] > 0.95
+    assert score(a, make(tracker="meta_pixel:222", clues=["POST y.test/api/v2/b/"]))["score"] < r["score"]  # both known, different

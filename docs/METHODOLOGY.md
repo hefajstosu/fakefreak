@@ -125,6 +125,33 @@ ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - 35 automated tests (synthetic data only) cover schemas, extraction post-processing, scanning, similarity, dedup,
   decisions, robustness and model failover.
 
+### Quality on new material (`python -m ads.quality`, no LLM calls, about 2 s)
+The organiser tests new variants of known campaigns and material from other campaigns. `ads.quality` replays that:
+every item is analysed against the database exactly as in the panel (`analyze.compare`) and its outcome is checked
+against the gold labels: correct, missed (a known campaign was not joined) or false join (joined a campaign it has no
+gold relation to). Items: each real case left out of the database in turn, and the 189 synthetic variants (surface
+details swapped, scam blueprint kept) as new versions of known campaigns, with the parent in the database or held
+out, and with the parent's technical traces (same operator) or without them (new infrastructure). Tau 0.6:
+
+| test | n | correct | joined known campaign | false joins |
+|---|---:|---:|---:|---:|
+| leave-one-out, real cases | 10 | 0.80 | 0.67 | 0.00 |
+| variants, parent known, same infrastructure | 189 | 1.00 | 1.00 | 0.00 |
+| variants, parent known, new infrastructure | 189 | 0.99 (was 0.60) | 0.99 | 0.00 |
+| variants, parent held out, same infrastructure | 189 | 0.80 | 0.66 | 0.00 |
+| variants, parent held out, new infrastructure | 189 | 0.40 | 0.00 | 0.00 |
+
+All 156 items that had no known campaign stayed new. Two fixes came out of this measurement; neither is a weight
+change and neither moves the gold metrics (6 of 7 ranking constraints, pairwise F1 unchanged):
+- Technical traces missing on one side are now dropped like every other missing feature. Before, a page without
+  traces (unreachable page, ad screenshot only) was scored 0 against a case that had them, which cost about 0.12.
+- A pair scoring at least 0.80 (the decision's "confirmed" level) now joins its campaign like hard evidence. Before,
+  such a near-identical article was "confirmed" by the verdict but not joined, because average link compared it with
+  every member of a campaign held together by hard evidence.
+The open gap is the last row: a new ad of a known campaign that shares neither infrastructure nor its exact template
+is not linked by content alone. The next steps are entity overlap as supporting rather than subtracting evidence and
+the E5 embeddings for the free-text features, both checked against this table.
+
 ## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal
   synthetic data.

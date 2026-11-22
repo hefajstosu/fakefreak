@@ -284,11 +284,17 @@ def campaign(members: Sequence[str], profiles: Dict[str, dict], scores: Dict[Tup
         "members": members, "size": len(members), "signature": signature(members, profiles), "hard_links": hard,
         "cohesion": {"min": min(vals), "mean": round(sum(vals) / len(vals), 4), "max": max(vals)} if vals else None,
     }
-    # parts held together by hard evidence alone (must-link components); several parts were merged by mean score
-    parts = _components(members, [(h["a"], h["b"]) for h in hard])
+    # parts held together by hard evidence or near-identical content alone; several parts were merged by mean score
+    same = [(x, y) for x, y, r in pairs if not clustering.is_must_link(r) and clustering.joins_alone(r)]
+    out["same_content_links"] = [{"a": x, "b": y, "score": clustering.pair(scores, x, y)["score"]} for x, y in same]
+    parts = _components(members, [(h["a"], h["b"]) for h in hard] + same)
     out["parts"] = [sorted(p) for p in sorted(parts, key=lambda p: (-len(p), sorted(p)))]
-    out["rule"] = ("single case" if len(members) == 1 else "hard evidence" if len(parts) == 1 else
-                   "hard evidence and mean score" if hard else "mean score")
+    if len(members) == 1:
+        out["rule"] = "single case"
+    elif len(parts) == 1:
+        out["rule"] = ("hard evidence" if not same else "same content" if not hard else "hard evidence and same content")
+    else:
+        out["rule"] = "hard evidence and mean score" if hard or same else "mean score"
     if len(parts) > 1:  # mean score between the parts (what average-link compared with tau)
         out["parts_mean"] = round(sum(clustering.average_score(p, q, scores) for i, p in enumerate(parts)
                                       for q in parts[i + 1:]) / (len(parts) * (len(parts) - 1) / 2), 4)
@@ -327,9 +333,10 @@ def assignment(assigned: Dict[str, Any], tau: float, top: int = 6) -> List[Dict[
                 if clustering.is_must_link(r)]
         best = max(res.items(), key=lambda kv: kv[1]["score"])
         is_joined = tuple(g) in joined
+        rule = ("hard evidence" if hard else "same content" if best[1]["score"] >= clustering.SAME_CONTENT_SCORE
+                else "mean score >= tau") if is_joined else "below tau"
         rows.append({"members": list(g), "mean": d["mean"], "gap": round(tau - d["mean"], 4), "hard": hard,
-                     "best": {"case": best[0], "score": best[1]["score"]}, "joined": is_joined,
-                     "rule": ("hard evidence" if hard else "mean score >= tau") if is_joined else "below tau"})
+                     "best": {"case": best[0], "score": best[1]["score"]}, "joined": is_joined, "rule": rule})
     rows.sort(key=lambda r: (not r["joined"], -r["mean"]))
     return rows[:max(top, len(joined))]
 

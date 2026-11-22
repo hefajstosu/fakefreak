@@ -181,11 +181,12 @@ def anchor_similarity(a, b, doc_freq: Optional[dict] = None, n_docs: Optional[in
     Each shared value counts log(N / df): a tracker seen in 2 of 10 cases is strong evidence, a CDN seen
     in all 10 is worth 0. Score = weight(shared) / weight(union). Without doc_freq all values weigh 1.
     `ignore` holds mass-infrastructure values (cluster.yaml: ignore_values) that are never evidence.
+    None when either side has no values: like every other feature, data missing on one side is dropped, not scored 0.
     """
     sa = {x for x in (a or []) if x and x not in ignore}
     sb = {x for x in (b or []) if x and x not in ignore}
-    if not sa and not sb:
-        return None
+    if not sa or not sb:
+        return None  # no traces on one side is missing data (page down, ad screenshot only), not a mismatch
 
     def w(v):
         if doc_freq and n_docs:

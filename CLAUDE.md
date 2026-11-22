@@ -36,6 +36,7 @@ src/ads/explain.py            reporting only: why a pair scores what it does, wh
                               used by the web panel (Dlaczego?, graph tab, report) and `python -m ads.explain`
 src/ads/robustness.py         channel ablation + missing-data tests
 src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
+src/ads/quality.py            the organiser's test replayed: leave-one-out, variants as new material, must-not-link
 src/ads/app.py                Streamlit demo
 src/ads/web/                  web panel: server.py (stdlib JSON API on 127.0.0.1) + static/ page; logic in analyze.py (no UI, tested)
 config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
@@ -125,7 +126,9 @@ Profiles in `data/cases` come from mixed models, so small differences between th
 - Git prints LF/CRLF warnings; they are harmless.
 
 ## Current status and known issues
-- 10 sample cases extracted; 28 variants generated earlier (case 14 has only 1), but `variants.json` files are absent on some machines.
+- 10 sample cases extracted. Variants live in `variants_a*.json` / `variants_n*.json` (not only `variants.json`):
+  `clustering.load_all_variants` reads them all, 189 unique, all fresh. `python -m ads.quality` uses them as new material
+  (see METHODOLOGY section 10). Traces missing on one side are dropped (not 0); a pair >= 0.80 joins like hard evidence.
   Gold: 7 ranking constraints; with `sim_functions` + `clustering` all 7 pass (the 47/14/5 health group failed with the old
   placeholder). Pairwise at tau 0.6: strict P/R/F1 0.33/0.67/0.44, broad 1.00/0.46/0.63 (average-link needs the must-link rule:
   without it broad recall is 0.08 at 0.6). The variant gate and variant wiring are not yet measured (no variants locally).

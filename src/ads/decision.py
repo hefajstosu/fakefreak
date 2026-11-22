@@ -20,7 +20,7 @@ hard_evidence, tau_only, family, nothing), which the panel and explain.decision_
 """
 from typing import Any, Dict, List, Optional, Tuple
 
-CONFIRM_SCORE = 0.80
+CONFIRM_SCORE = 0.80  # = clustering.evidence.SAME_CONTENT_SCORE: such a pair also joins the campaign
 FAMILY_SCORE = 0.30
 
 

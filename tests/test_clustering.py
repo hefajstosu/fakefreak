@@ -18,7 +18,7 @@ def fake(scores, links=None):
 
 def test_average_link_does_not_chain_through_one_weak_bridge():
     ids = {k: {} for k in "abc"}
-    s = fake({("a", "b"): 0.9, ("b", "c"): 0.9, ("a", "c"): 0.1})
+    s = fake({("a", "b"): 0.7, ("b", "c"): 0.7, ("a", "c"): 0.1})  # above tau, below the same-content score
     # single link would give one group; mean(a,c)=0.1 blocks the second merge only if c joins neither strongly
     groups = cl.cluster(ids, 0.6, s)
     assert sorted(len(g) for g in groups) == [1, 2]
@@ -84,3 +84,22 @@ def test_variants_are_never_compared_with_each_other():
     st = {}
     cl.best_score(a, b, [make(), make()], [make(), make(), make()], stats=st)
     assert st["variant_comparisons"] == 5           # 2 + 3, not 2 * 3 more
+
+
+def test_near_identical_content_joins_alone_but_a_weaker_pair_needs_the_mean():
+    ids = {k: {} for k in "abc"}
+    s = fake({("a", "b"): 0.85, ("b", "c"): 0.85, ("a", "c"): 0.1})
+    assert cl.cluster(ids, 0.6, s) == [["a", "b", "c"]]   # each pair is the same ad again: seeds, not averages
+    assert cl.joins_alone({"score": 0.8, "strong_links": []}) and not cl.joins_alone({"score": 0.79, "strong_links": []})
+
+
+def test_quality_report_classifies_joins_misses_and_false_joins():
+    from ads import quality
+    db = {"a": make(), "b": make(product="Other", tracker="meta_pixel:1"), "c": make(**OTHER)}
+    db["a"]["technical_artifacts"]["tracker_ids"] = ["meta_pixel:1"]
+    gold = {"case_ids": ["a", "b", "c"], "groups": [{"level": "same_campaign", "members": ["a", "b"]}]}
+    rows = {r["item"]: r for r in quality.leave_one_out(db, gold, 0.6)}
+    assert rows["a"]["outcome"] == "correct" and rows["c"]["outcome"] == "correct" and rows["c"]["joined"] == []
+    report = quality.run(0.6, db, gold, {"c": [make(**OTHER)]})
+    assert report["variants, parent known, new infrastructure"]["accuracy"] == 1.0
+    assert report["must-not-link (all items that should stay new)"]["stay_new_correct"] == 1.0

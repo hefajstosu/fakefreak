@@ -1,12 +1,12 @@
 """Average-link agglomerative clustering over a pair-score table, with must-link seeds.
 
 Average link merges two groups only when the MEAN score between their members reaches tau, so one weak
-bridge between two campaigns cannot chain them together (single link does). Must-link pairs (hard evidence)
-are merged first and unconditionally. Pure Python; fine for the hundreds of articles this project handles.
+bridge between two campaigns cannot chain them together (single link does). Must-link pairs (hard evidence, or a
+near-identical content score, see evidence.joins_alone) are merged first and unconditionally. Pure Python; fine for the hundreds of articles this project handles.
 """
 from typing import Dict, List, Optional, Tuple
 
-from .evidence import is_must_link
+from .evidence import joins_alone
 from .pairs import Profiles, Scores, Variants, pair, pair_scores
 
 
@@ -37,7 +37,7 @@ def cluster(profiles: Profiles, tau: float, scores: Optional[Scores] = None, use
     (used only when `scores` is not given) help the real articles score higher but never appear in a group."""
     scores = scores if scores is not None else pair_scores(profiles, variants, variant_gate)
     ids = sorted(profiles)
-    seeds = [k for k, r in scores.items() if use_must_link and is_must_link(r)]
+    seeds = [k for k, r in scores.items() if use_must_link and joins_alone(r)]
     groups = _components(ids, seeds)
     while len(groups) > 1:
         best, bi, bj = tau, -1, -1
