@@ -40,6 +40,9 @@ python -m ads.llm.extract ../data/cases/48/case_input.json ../data/cases/48/prof
 python -m ads.llm.generate 48 --n 3 --k 2               # variants
 python -m ads.evaluate --matrix                         # metrics vs gold
 python -m ads.ablation                                  # with vs without variants
+python -m ads.robustness channels                       # switch each feature group off in turn
+python -m ads.robustness make-degraded --model gemini-3.5-flash-lite   # re-extract reduced inputs (LLM quota)
+python -m ads.robustness degrade                        # missing-data tests (ad only / pages only / no traces)
 cd .. && streamlit run src/ads/app.py                   # demonstrator
 python -m pytest tests                                  # unit tests (synthetic data, no network)
 ```

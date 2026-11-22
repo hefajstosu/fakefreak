@@ -81,6 +81,16 @@ Profiles in `data/cases` come from mixed models, so small differences between th
 - 10 sample cases extracted; 28 variants (case 14 has only 1). Gold: 7 ranking constraints, 6 pass with the placeholder
   similarity (the 47/14/5 health group fails because the ad-template feature is too influential).
 - Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
+- Findings from `ads.robustness` (placeholder similarity, tau 0.55, 10 gold cases; weights are guesses, so treat as indicative):
+  * Infrastructure and scam type + topic carry the grouping: switching either off drops recall sharply.
+  * Switching off text, entities or props/amounts RAISES recall: surface features dilute pairs that share a template or
+    infrastructure, although surface elements are exactly what operators swap. A better similarity should use entity overlap
+    as supporting evidence, not let differences subtract. Switching off templates fixes the failing gold constraint.
+  * Missing data: pages + logs only keep about 80% of partner recall; the ad creative alone scores below the threshold
+    (recall 0) yet its top-1 neighbour is still in the right family. Decide per evidence level: suggest a family when
+    confidence is low, confirm a campaign only with strong evidence. From the ad alone, scam type is unreliable for some
+    cases because it depends on where the funnel ends.
+  * Caveat: reduced-input extractions used gemini-3.5-flash-lite, baseline profiles come from other models.
 - Entity strings are not normalised yet (`tvn24` vs `TVN24`): normalise in similarity, not in profiles.
 - Live URL scan is done (`url_scan.py`): redirect chain, tracker IDs (also from config blobs and first-party scripts),
   form endpoints, first-party files, and platform endpoint paths (`api:/api/v1/...`) read from up to 3 first-party
