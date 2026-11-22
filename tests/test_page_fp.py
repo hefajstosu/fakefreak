@@ -6,15 +6,12 @@ import os
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
+from PIL import Image
 
-from PIL import Image  # noqa: E402
-
-from ads.preprocess import page_fp as pf  # noqa: E402
-from ads.similarity import score  # noqa: E402
-from ads import clustering  # noqa: E402
-from test_similarity import make  # noqa: E402
+from ads.preprocess import page_fp as pf
+from ads.similarity import score
+from ads import clustering
+from factory import make
 
 TEMPLATE = """<html><body><div class="hdr top-{n}"><nav class="menu"><a>{w1}</a><a>{w2}</a></nav></div>
 <main class="article"><h1 class="title">{w1}</h1><p class="lead">{w2}</p><div class="comments"><div class="c">

@@ -43,7 +43,7 @@ changes only those traits must score exactly 1.0 against its parent. This is che
 ## 4. Extraction
 - Closed vocabularies (scam type, topic, role, templates, persuasion devices) keep labels consistent across ads.
 - The model is told to be precise about entity lists and to identify people only from text or captions, never from
-  faces. Unnamed people are flagged for an optional local face-matching step (not installed in this build).
+  faces. Unnamed people stay unnamed; `preprocess/likeness.py` only reports the same face across materials.
 - **Code owns what code can know:** technical traces, funnel stages and page text are written by code, not typed by the
   model. This removed a class of malformed-JSON failures and means traces are never hallucinated.
 - Output is validated against the profile schema, with one repair attempt; transcripts of video audio come from the
@@ -54,10 +54,11 @@ changes only those traits must score exactly 1.0 against its parent. This is che
 features that could not be compared, and the strong links. The score is a weighted mean over the features present on
 both sides (null-aware: a feature missing on one side is skipped, not counted as zero); technical anchors (tracker IDs,
 redirect domains, endpoint and form clues, sponsoring page) are features with their own weights. Hard evidence does not
-change the number. It is reported next to it and, in grouping, a shared tracker ID or the same sponsoring page is a
-must-link: it joins two cases into one campaign whatever their score. Two or more shared platform endpoint prefixes
-prove a shared landing-page tool and join two cases of the same scam type into one family (section 10). Shared domains and files
-are supporting evidence only (a mass domain must not chain unrelated campaigns).
+change the number. It is reported next to it and, in grouping, a shared tracker ID, the same sponsoring page, the same
+ad campaign ID or domains on one certificate are a must-link: they join two cases into one campaign whatever their
+score. Two or more shared platform endpoint prefixes, two or more identical page images or the same own tracking
+template prove a shared tool or kit and join two cases of the same scam type into one family (section 10). Shared
+domains and files are supporting evidence only (a mass domain must not chain unrelated campaigns).
 
 ## 6. Live URL scan
 For a URL, the scanner fetches the page like a phone visitor (mobile agent, Polish locale, social referer), follows HTTP,
@@ -77,7 +78,7 @@ the same tracker and the same platform endpoints as the recorded logs, so a fres
   family, not claim a campaign.
 
 ## 8. Interpretability: every link comes with its reasons
-`src/ads/explain.py` recomputes each explanation with the same functions, weights and anchor settings as the score,
+`src/ads/explain/` recomputes each explanation with the same functions, weights and anchor settings as the score,
 so what the analyst reads always adds up to the number shown. It never changes a score, a group or a decision.
 - **A pair of cases** (panel: "Dlaczego?" on every link; CLI: `python -m ads.explain A B`): the contribution of each
   feature and of each feature group (infrastructure, scam type and topic, templates, persuasion, entities, text, surface),
@@ -101,9 +102,9 @@ so what the analyst reads always adds up to the number shown. It never changes a
 - **Report**: the analyst can download the whole analysis with its reasons as Markdown.
 The verdict and the grouping use one rule set: must-link evidence with any case confirms the article (before, an article
 could join a campaign by hard evidence while its verdict still said "suggested family").
-Explaining the sample pairs also surfaced a limit of the score itself: platform endpoints that make a must-link are
-compared as raw, host-specific strings inside the score, so they can add nothing to the number while still joining
-the pair as evidence. The explanation shows this rather than hiding it.
+Explaining the sample pairs also surfaced a limit of the score itself: platform endpoints are compared as raw,
+host-specific strings inside the score, so they can add nothing to the number while still linking a family as
+evidence. The explanation shows this rather than hiding it.
 
 ## 9. Counterfactual variants
 An LLM generates variants of a case in which surface elements are swapped (a person for another of the same category, an
@@ -116,7 +117,7 @@ with their parent to avoid evaluation leakage.
 Gold labels are hand-made: overlapping groups with strength levels (same campaign, same template, same scheme) and seven
 ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - LLM extraction agrees with the gold scam type on 9 of 10 cases (the tenth has no matching enum value).
-- Placeholder similarity at threshold 0.6: 6 of 7 ranking constraints; broad pairwise precision 1.00 and recall 0.46;
+- The first similarity at threshold 0.6 (before the changes below): 6 of 7 ranking constraints; broad pairwise precision 1.00 and recall 0.46;
   strict F1 0.44. The failing constraint is caused by the ad-template feature being too influential.
 - **Channel ablation** (each feature group switched off in turn): infrastructure and scam type + topic carry the
   grouping (strict recall 0.67 to 0.33 when either is removed). Removing text, entities or props/amounts raises recall,
@@ -128,12 +129,12 @@ ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - **Variants:** mean similarity to the parent 0.92 (no semantic drift); demographics-only variants score exactly 1.0
   (4 of 4); adding variants to the database made no measurable difference, which is an honest negative result on this
   small dataset with exact-match features.
-- 35 automated tests (synthetic data only) cover schemas, extraction post-processing, scanning, similarity, dedup,
-  decisions, robustness and model failover.
+- 97 automated tests (synthetic data only, no network) cover schemas, extraction post-processing, scanning, page
+  fingerprints, domain metadata, similarity, grouping, explanations, dedup, decisions, the panel API and model failover.
 
-### Quality on new material (`python -m ads.quality`, no LLM calls, about 2 s)
-The organiser tests new variants of known campaigns and material from other campaigns. `ads.quality` replays that:
-every item is analysed against the database exactly as in the panel (`analyze.compare`) and its outcome is checked
+### Quality on new material (`python -m ads.evaluation.quality`, no LLM calls, about 2 s)
+The organiser tests new variants of known campaigns and material from other campaigns. `ads.evaluation.quality` replays that:
+every item is analysed against the database exactly as in the panel (`analysis.compare`) and its outcome is checked
 against the gold labels: correct, missed (a known campaign was not joined) or false join (joined a campaign it has no
 gold relation to). Items: each real case left out of the database in turn, and the 189 synthetic variants (surface
 details swapped, scam blueprint kept) as new versions of known campaigns, with the parent in the database or held
@@ -159,7 +160,7 @@ The open gap is the last row: a new ad of a known campaign that shares neither i
 is not linked by content alone.
 
 **Purity and the threshold.** `purity` is the share of the cases an item joined that are the same campaign or
-template in gold (same scheme counts as wrong). `python -m ads.quality --sweep` repeats the table for tau 0.30 to 0.80.
+template in gold (same scheme counts as wrong). `python -m ads.evaluation.quality --sweep` repeats the table for tau 0.30 to 0.80.
 Lowering tau closes the last row (0.40 at 0.6, 0.80 at 0.40) with no false joins, but what it adds are same-scheme
 cases: purity of known variants falls from 0.80 to 0.59. So a lower tau groups families, not campaigns; families are
 handled by the hierarchy and the "suggested family" verdict, and tau stays at 0.6.
@@ -184,7 +185,7 @@ template), families against the broad gold (also same scheme).
 | campaigns | strict | 0.33 / 0.67 / 0.44 | **1.00** / 0.33 / **0.50** |
 | families (not measured before) | broad | 1.00 / 0.85 / 0.92 | 1.00 / 0.85 / **0.92** |
 
-New material at both levels (`ads.quality`, tau 0.6; families: correct family or correctly none):
+New material at both levels (`ads.evaluation.quality`, tau 0.6; families: correct family or correctly none):
 
 | test | campaigns correct | purity | false joins | families correct | family false joins |
 |---|---:|---:|---:|---:|---:|
@@ -198,17 +199,17 @@ Every campaign the system forms or joins is now a gold campaign (purity 1.00) an
 case; a new ad of a known campaign with no shared trace and a different template is placed in the right family 9 times in
 10. The remaining family miss is case 14 (scores 0.25 to 0.29 with its partners, just under the family threshold of
 0.30); the pairs 48-61 and 14-47 ("same template" in gold) are not joined as campaigns by content alone. Both are the
-target of semantic text similarity (E5 embeddings, implemented in `sim_functions/embeddings.py`, not yet used).
+target of a better text similarity: the comparison summary is matched by stem overlap only today.
 
 ### Features and sources, measured
-Every feature is measured on its own against the gold labels (`python -m ads.features`): how many cases have it, how
+Every feature is measured on its own against the gold labels (`python -m ads.evaluation.features`): how many cases have it, how
 far it separates same-campaign pairs from unrelated ones (AUC) and how often it would mislead (unrelated pairs scoring
 0.5 or more). New features were added with weights fixed by analogy before measuring (page structure as the landing
 template, page images as the other first-party traces) and kept only where they did not mislead; logos and domain
 metadata are measured and shown but carry weight 0. The sources behind the features, with their coverage, are in
 `docs/DATA_SOURCES.md`; the patterns they revealed are in `docs/CAMPAIGN_PATTERNS.md`.
 
-Feature usefulness on 10 cases (`python -m ads.features`). Strict pairs per feature are few (at most 3 in the sample gold), so AUC is indicative; coverage and false hits are exact.
+Feature usefulness on 10 cases (`python -m ads.evaluation.features`). Strict pairs per feature are few (at most 3 in the sample gold), so AUC is indicative; coverage and false hits are exact.
 
 | feature | weight | coverage | comparable pairs | strict | same scheme | unrelated | AUC | false hits |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -226,7 +227,7 @@ Feature usefulness on 10 cases (`python -m ads.features`). Strict pairs per feat
 | product_name | 1.0 | 100% | 100% | 0.43 | 0.10 | 0.00 | 0.83 | 0/32 |
 | impersonated_media | 0.8 | 70% | 93% | 0.67 | 0.33 | 0.12 | 0.78 | 5/30 |
 | companies | 0.8 | 80% | 98% | 0.32 | 0.31 | 0.06 | 0.78 | 2/32 |
-| embedding | 0.8 | 100% | 100% | 0.23 | 0.23 | 0.18 | 0.76 | 0/32 |
+| summary | 0.8 | 100% | 100% | 0.23 | 0.23 | 0.18 | 0.76 | 0/32 |
 | infra_metadata | 0.0 | 70% | 47% | 0.25 | 0.00 | 0.00 | 0.75 | 0/15 |
 | promise | 0.8 | 100% | 100% | 0.27 | 0.23 | 0.10 | 0.74 | 0/32 |
 | setting_and_props | 0.3 | 100% | 100% | 0.24 | 0.16 | 0.07 | 0.72 | 2/32 |
@@ -263,7 +264,7 @@ The same face appears across unrelated campaigns (a public figure's likeness is 
 health videos show three different people, so a likeness describes the scheme and misleads as campaign evidence about
 as often as persuasion devices do (6/32 against 7/32). It is extracted and reported, not scored. A reference set with
 names (the organiser's suggestion) would only add names that the text already gives in most cases, at the cost of
-identifying people biometrically; it is left out on purpose (`preprocess/faces.py` remains as the optional DeepFace path).
+identifying people biometrically; it is left out on purpose.
 Face features are biometric data: computed locally, cached only in the gitignored `.cache/likeness`, never written to
 profiles, the repository or the panel.
 
@@ -279,10 +280,10 @@ profiles, the repository or the panel.
 - Dependency licences are listed in `docs/LICENSES.md`.
 
 ## 12. Limitations and next steps
-Small labelled set and guessed weights; a stronger similarity (semantic embeddings, rarity-weighted evidence,
-entity overlap as supporting evidence only) is the biggest lever. Image duplicates miss differently framed captures.
-The URL scan does not run JavaScript. No face reference set yet. Per-campaign calibrated thresholds, an ad-library
-scheduler and a graph database are future work.
+Small labelled set and weights fixed by analogy; a stronger text similarity (semantic embeddings), rarity-weighted
+evidence and entity overlap as supporting evidence only are the biggest levers. Image duplicates miss differently
+framed captures. The URL scan does not run JavaScript. No face reference set, on purpose (section 10). Per-campaign
+calibrated thresholds, an ad-library scheduler and a graph database are future work.
 
 ## 13. Reproduce
 See `README.md` (setup, commands) and `CLAUDE.md` (operational notes such as free-tier quota). Demo script: `docs/DEMO.md`.

@@ -1,26 +1,9 @@
-"""Tests for the placeholder similarity and clustering. Synthetic data only."""
+"""ads.similarity on synthetic profiles: score, missing data, evidence."""
 import copy
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from ads import clustering as clu  # noqa: E402
-from ads.similarity import score  # noqa: E402
-from test_extract import profile  # noqa: E402
-
-
-def make(scam="fake_investment", topic="finance_crypto", product="AlphaPlat", tracker=None, text="invest platform deposit", clues=None):
-    p = profile()
-    p["core_narrative"].update(ad_goal_scam_type=scam, topic=topic)
-    p["entities"]["product_or_platform"]["exact_name"] = product
-    p["canonical_comparison_text"] = text + " scenario summary long enough"
-    p["technical_artifacts"]["tracker_ids"] = [tracker] if tracker else []
-    p["technical_artifacts"]["dom_and_form_clues"] = clues or []
-    p["technical_artifacts"]["urls_and_domains"] = []  # no accidental shared domain between test profiles
-    p["technical_artifacts"]["ad_library_metadata"]["page_id_or_name"] = None  # nor a shared sponsoring page
-    return p
+from ads import clustering as clu
+from ads.similarity import score
+from factory import make
 
 
 def test_identical_profiles_score_one():

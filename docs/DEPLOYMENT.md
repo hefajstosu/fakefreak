@@ -8,13 +8,12 @@ Everything here was checked on the dates and versions given; what was not checke
 | Way | Command | Checked |
 |---|---|---|
 | Docker Compose (recommended) | `docker compose up --build`, then http://127.0.0.1:8000 | Docker 29.9 / Compose 5.7 on macOS (arm64): builds in about 2 min, panel healthy in about 8 s |
-| Compose with the Streamlit demo | `docker compose --profile streamlit up --build`, then http://127.0.0.1:8501 | same; both services healthy |
 | Plain Docker | `docker build -t fakefreak .` and `docker run --rm -p 127.0.0.1:8000:8000 --env-file .env -v "$PWD/data:/app/data" fakefreak` | same |
-| Native Python | `pip install -r requirements.lock`, then `cd src && python -m ads.web.server` | Python 3.9.6 and 3.12 on macOS: 61 tests pass, same metrics |
+| Native Python | `pip install -r requirements.lock`, then `cd src && python -m ads.web.server` | Python 3.9.6 and 3.12 on macOS: 97 tests pass, same metrics |
 | CI | `.github/workflows/ci.yml`: tests on Ubuntu, Windows and macOS with Python 3.9 and 3.12, then the container build and a smoke test | runs on push; the container job was replayed locally, the OS matrix needs a push to GitHub |
 
-Every command-line tool runs in the same image: `docker compose run --rm panel python -m ads.evaluate`
-(also `ads.ablation`, `ads.robustness`, `ads.bench`, `ads.preprocess.assemble`, `ads.llm.extract`).
+Every command-line tool runs in the same image: `docker compose run --rm panel python -m ads.evaluation.evaluate`
+(also `ads.evaluation.quality`, `ads.evaluation.bench`, `ads.explain`, `ads.preprocess.enrich`, `ads.llm.extract`).
 The image is multi-platform by construction (official `python:3.12-slim-bookworm` base, wheels for amd64 and arm64);
 arm64 was built locally, amd64 is built by CI.
 
@@ -28,7 +27,6 @@ arm64 was built locally, amd64 is built by CI.
 | `ADS_UID`, `ADS_GID` | env for `docker compose` | `1000` | container user, set to `$(id -u)` / `$(id -g)` on Linux if saving cases fails |
 | model, fallbacks, cache | `config/llm.yaml` | `gemini-3.1-flash-lite`, two fallbacks | provider, models, retries, prompt files |
 | weights, ignored values | `config/cluster.yaml` | see file | similarity weights, validated on load (unknown name or negative weight fails fast) |
-| preprocessing | `config/preprocess.yaml` | see file | video sampling, transcription, optional face module |
 
 Switching the LLM provider is one `LLMClient` subclass in `src/ads/llm/client.py` (`_call`) plus `provider:` in
 `config/llm.yaml`; caching, retries, JSON repair and failover are provider-independent.
@@ -37,10 +35,13 @@ Switching the LLM provider is one `LLMClient` subclass in `src/ads/llm/client.py
 - **Database = files.** One folder per case in `data/cases/<id>/` (`case_input.json`, `profile.json`, optional
   `variants*.json`, `meta.json` for cases saved from the panel). Back up or move the system by copying `data/`.
   Nothing else is needed to rebuild every score, group and metric: they are recomputed from the profiles.
-- **Cache** (`.cache/`, a named volume `llm-cache` in compose): LLM responses keyed by prompt, input and model, and
-  image/page fingerprints for duplicate detection. Losing it costs LLM calls, not data.
+- **Cache** (`.cache/`, the named volume `ads-cache` in compose): LLM responses keyed by prompt, input and model,
+  image/page fingerprints for duplicate detection, public registry answers and the face models. Losing it costs LLM
+  and network calls, not data.
+- **Uploads** (`data/uploads/<analysis>/`): files sent with an analysis, kept until it is saved or dropped (at most 50
+  pending analyses).
 - The image contains code, schemas, prompts, config and the public label-only gold file. No sample data and no
-  secrets: `.dockerignore` excludes `data/raw`, `data/cases`, local gold notes, `.env`, `api.txt` and the cache.
+  secrets: `.dockerignore` excludes `data/raw`, `data/cases`, `data/uploads`, local gold notes, `.env`, `api.txt` and the cache.
 
 ## 4. Security and data protection
 - Ports are published on the host's `127.0.0.1` only; the panel shows the organiser's samples, which must not be public.
@@ -61,7 +62,7 @@ Switching the LLM provider is one `LLMClient` subclass in `src/ads/llm/client.py
 - Comparison, clustering, duplicate detection and the panel need no network and no GPU.
 
 ## 6. Scaling, measured
-`python -m ads.bench` grows the database from the 10 sample profiles (copies with their own tracker IDs and summary)
+`python -m ads.evaluation.bench` grows the database from the 10 sample profiles (copies with their own tracker IDs and summary)
 and times the comparison. Apple M-series laptop, Python 3.12, one process:
 
 One `score()`: 0.80 ms cold, 0.18 ms with warm string caches (1.9 ms before the changes below).
@@ -103,6 +104,5 @@ The web server is the standard-library threaded HTTP server: enough for a few an
 instances can share `data/` read-only; writes (saving a case) should then go through one instance.
 
 ## 7. Image size
-About 0.8 GB of Python packages: the Streamlit demo brings pyarrow and pandas (about 240 MB), the bundled ffmpeg
-binary is about 125 MB and OpenCV about 90 MB. A panel-only image without Streamlit would be roughly 300 MB smaller;
-it is not built separately so that one image serves both demos.
+767 MB (arm64, measured after removing the Streamlit demo, which took about 300 MB). The largest Python packages are
+the bundled ffmpeg binary (about 125 MB) and OpenCV (about 90 MB).

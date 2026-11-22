@@ -22,7 +22,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.lock
       - run: pip install -r requirements.lock
-      - run: python -m pytest tests -q
+      - run: python -m pytest -q
 
   container:
     runs-on: ubuntu-latest
@@ -40,6 +40,6 @@ jobs:
           curl -fsS "http://127.0.0.1:8000/api/groups?tau=0.6"
           curl -fsS -o /dev/null http://127.0.0.1:8000/
       - name: CLI runs inside the image
-        run: docker compose run --rm panel python -c "import ads.analyze, ads.web.server, streamlit, cv2, imageio_ffmpeg; print('ok')"
+        run: docker compose run --rm panel python -c "import ads.analysis, ads.web.server, ads.evaluation.quality, cv2, imageio_ffmpeg; print('ok')"
       - if: always()
         run: docker compose logs && docker compose down -v

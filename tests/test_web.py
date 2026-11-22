@@ -1,21 +1,17 @@
 """Tests for the web panel's API. Synthetic data only: no network, no LLM, nothing read from or written to data/."""
 import json
 import os
-import sys
 import threading
 import urllib.error
 import urllib.request
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
+import pytest
 
-import pytest  # noqa: E402
-
-from ads import database, dedup  # noqa: E402
-from ads.llm.client import MockClient  # noqa: E402
-from ads.web import api, uploads  # noqa: E402
-from ads.web import server as srv  # noqa: E402
-from test_similarity import make  # noqa: E402
+from ads import database, dedup
+from ads.llm.client import MockClient
+from ads.web import api, uploads
+from ads.web import server as srv
+from factory import make
 
 
 @pytest.fixture

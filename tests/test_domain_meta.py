@@ -1,17 +1,12 @@
 """preprocess/domain_meta.py with every network call mocked: facts, cache, mass-infrastructure filter, evidence."""
-import os
-import sys
 from datetime import date
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
+import pytest
 
-import pytest  # noqa: E402
-
-from ads.preprocess import domain_meta as dm  # noqa: E402
-from ads import clustering  # noqa: E402
-from ads.similarity import score  # noqa: E402
-from test_similarity import make  # noqa: E402
+from ads.preprocess import domain_meta as dm
+from ads import clustering
+from ads.similarity import score
+from factory import make
 
 
 class Resp:

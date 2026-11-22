@@ -1,15 +1,11 @@
 """Tests for duplicate detection and the graded decision. Synthetic images and texts only."""
-import os
 import random
-import sys
 
 import numpy as np
 from PIL import Image
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from ads import dedup  # noqa: E402
-from ads.decision import decide  # noqa: E402
+from ads import dedup
+from ads.decision import decide
 
 
 def make_image(path, seed, size=(360, 640)):

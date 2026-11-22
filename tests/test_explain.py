@@ -1,16 +1,9 @@
 """Tests for ads.explain on synthetic profiles: the explanation must add up to the score and name real values."""
 import copy
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from ads import clustering, explain  # noqa: E402
-from ads.similarity import score  # noqa: E402
-from test_similarity import make  # noqa: E402
-
-OTHER = dict(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor")
+from ads import clustering, explain
+from ads.similarity import score
+from factory import OTHER, make
 
 
 def test_pair_contributions_add_up_to_the_score():

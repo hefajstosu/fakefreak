@@ -1,14 +1,9 @@
 """Tests for channel masks and the ablation metrics. Synthetic data only."""
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from ads.evaluation import robustness as rb  # noqa: E402
-from ads.evaluation.gold import auc  # noqa: E402
-from ads.similarity import score  # noqa: E402
-from test_similarity import make  # noqa: E402
+from ads.evaluation import robustness as rb
+from ads.evaluation.gold import auc
+from ads.similarity import score
+from factory import make
 
 INFRA, TEXT, TEMPL, SCAM, ENT, PERS, PROPS = list(rb.GROUPS)
 

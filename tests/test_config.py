@@ -1,14 +1,9 @@
 """config/cluster.yaml must actually drive the similarity weights."""
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from ads.sim_functions import DEFAULT_WEIGHTS, compare_all, load_config  # noqa: E402
-from test_similarity import make  # noqa: E402
+from ads.sim_functions import DEFAULT_WEIGHTS, compare_all, load_config
+from factory import make
 
 
 def write(tmp_path, text):

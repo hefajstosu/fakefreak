@@ -1,13 +1,9 @@
 """preprocess/likeness.py without models or images: matching rule, source selection, clear error without models."""
-import os
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from ads.preprocess import likeness as lk  # noqa: E402
+from ads.preprocess import likeness as lk
 
 
 def unit(v):

@@ -1,19 +1,16 @@
-# Replace the placeholders with the real GitHub usernames, then enable "Require review from Code Owners"
-# on main. Until then this file only documents who owns what.
+# Replace the placeholders with the real GitHub usernames, then enable "Require review from Code Owners" on main.
+# Until then this file only documents who owns what (docs/CONTRIBUTING.md).
 /src/ads/preprocess/        @TRACK_A_USER
-/data/cases/                @TRACK_A_USER
-/data/refs/                 @TRACK_A_USER
-/config/preprocess.yaml     @TRACK_A_USER
+/src/ads/urls.py            @TRACK_A_USER
 
 /src/ads/llm/               @TRACK_B_USER
-/src/ads/validate.py        @TRACK_B_USER
 /prompts/                   @TRACK_B_USER
 /config/llm.yaml            @TRACK_B_USER
 
 /src/ads/similarity.py      @TRACK_C_USER
 /src/ads/sim_functions/     @TRACK_C_USER
 /src/ads/clustering/        @TRACK_C_USER
-/src/ads/evaluate.py        @TRACK_C_USER
+/src/ads/evaluation/        @TRACK_C_USER
 /data/gold/                 @TRACK_C_USER
 /config/cluster.yaml        @TRACK_C_USER
 

@@ -1,33 +1,24 @@
-# secrets and local state
+# Secrets and local state
 .env
+api.txt
 .venv/
 __pycache__/
 *.pyc
-# raw samples: personal/sensitive captures (HARs, screen recordings), never commit
-do_udostępnienia/
-data/raw/
-# caches and derived artifacts
+.pytest_cache/
 .cache/
-data/cases/*/contact_sheet.jpg
-data/refs/*/
-*.npz
-
-# Organiser materials: public redistribution forbidden (rules, section 8) -- from the team's earlier .gitignore
-manual.pdf
-dane/
 .DS_Store
 
-# Derived from the organiser's sample data: regenerate locally, never commit
-tests/fixtures/case_input/
-tests/fixtures/profiles/
-data/gold/*.local.json
-data/cases/*/
-scripts/build_fixtures.py
-scripts/make_manifests.py
-scripts/fetch_refs.py
-data/refs/categories.json
-data/refs/SOURCES.md
-
-# Old prototype (algorytm.py and its outputs), kept locally only
-archive/
+# The organiser's materials and everything derived from them: never commit (rules, section 8; CLAUDE.md rule 1)
+manual.pdf
+fakes
+dane/
+do_udostępnienia/
+data/raw/
+data/cases
 data/uploads/
+data/refs/
+data/gold/*.local.json
+scripts/
+
+# Old local prototype
+archive/

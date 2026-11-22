@@ -1,4 +1,4 @@
-# Demo image: web panel by default, Streamlit demo and every CLI command available too.
+# Demo image: the web panel by default; every CLI command runs in it too.
 # The organiser's sample data is NOT baked in: mount your data/ directory at run time.
 #
 #   docker compose up --build                      # web panel on http://127.0.0.1:8000 (see docker-compose.yml)
@@ -14,7 +14,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     PYTHONPATH=/app/src \
     ADS_HOST=0.0.0.0 \
     ADS_PORT=8000
@@ -39,7 +38,7 @@ RUN useradd --uid 1000 --create-home app \
 USER app
 WORKDIR /app/src
 
-EXPOSE 8000 8501
+EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
     CMD python -c "import os, urllib.request as u; u.urlopen('http://127.0.0.1:%s/api/status' % os.environ.get('ADS_PORT', '8000'), timeout=4)" || exit 1
 CMD ["python", "-m", "ads.web.server"]

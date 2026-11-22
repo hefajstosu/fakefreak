@@ -3,7 +3,7 @@
 The organiser asked for an indication of useful metadata sources. This is the catalogue of every source the tool
 uses, measured on the 10 sample cases (7 of them have recorded network logs or a live URL, 9 have a saved page), plus
 useful sources that need an API key and were therefore not used. Usefulness of the resulting features is measured by
-`python -m ads.features` (AUC of same-campaign against unrelated pairs, false hits on unrelated pairs); the table is in
+`python -m ads.evaluation.features` (AUC of same-campaign against unrelated pairs, false hits on unrelated pairs); the table is in
 `METHODOLOGY.md`.
 
 ## Sources used

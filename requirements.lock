@@ -1,9 +1,3 @@
-altair==5.5.0 ; python_full_version < '3.10'
-    # via streamlit
-altair==6.2.2 ; python_full_version == '3.10.*'
-    # via streamlit
-altair==6.3.0 ; python_full_version >= '3.11'
-    # via streamlit
 annotated-types==0.7.0 ; python_full_version < '3.10'
     # via pydantic
 annotated-types==0.8.0 ; python_full_version >= '3.10'
@@ -17,16 +11,10 @@ anyio==4.16.0 ; python_full_version >= '3.10'
     #   google-genai
     #   httpx
     #   httpx2
-    #   starlette
-    #   streamlit
 attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
-blinker==1.9.0 ; python_full_version < '3.10'
-    # via streamlit
-cachetools==6.2.6 ; python_full_version < '3.10'
-    # via streamlit
 certifi==2026.11.20
     # via
     #   httpcore
@@ -38,16 +26,8 @@ cffi==2.1.1 ; python_full_version >= '3.10' and platform_python_implementation !
     # via cryptography
 charset-normalizer==3.5.2
     # via requests
-click==8.1.8 ; python_full_version < '3.10'
-    # via streamlit
-click==8.5.1 ; python_full_version >= '3.10'
-    # via
-    #   streamlit
-    #   uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
-    # via
-    #   click
-    #   pytest
+    # via pytest
 cryptography==47.0.0 ; python_full_version <= '3.9'
     # via google-auth
 cryptography==50.0.2 ; python_full_version > '3.9'
@@ -58,10 +38,6 @@ exceptiongroup==1.3.2 ; python_full_version < '3.11'
     # via
     #   anyio
     #   pytest
-gitdb==4.0.12 ; python_full_version < '3.10'
-    # via gitpython
-gitpython==3.2.1 ; python_full_version < '3.10'
-    # via streamlit
 google-auth==2.50.0 ; python_full_version < '3.10'
     # via google-genai
 google-auth==2.63.1 ; python_full_version >= '3.10'
@@ -72,17 +48,14 @@ google-genai==2.33.0 ; python_full_version == '3.10.*'
     # via -r requirements.txt
 google-genai==3.6.1 ; python_full_version >= '3.11'
     # via -r requirements.txt
-h11==0.16.0
+h11==0.16.0 ; python_full_version < '3.11' or sys_platform != 'emscripten'
     # via
     #   httpcore
     #   httpcore2
-    #   uvicorn
 httpcore==1.0.9 ; python_full_version < '3.11'
     # via httpx
 httpcore2==2.16.2 ; python_full_version >= '3.11' and sys_platform != 'emscripten'
     # via httpx2
-httptools==0.9.0 ; python_full_version == '3.10.*'
-    # via streamlit
 httpx==0.28.1 ; python_full_version < '3.11'
     # via google-genai
 httpx2==2.16.2 ; python_full_version >= '3.11'
@@ -103,98 +76,42 @@ iniconfig==2.1.0 ; python_full_version < '3.10'
     # via pytest
 iniconfig==2.3.1 ; python_full_version >= '3.10'
     # via pytest
-itsdangerous==2.2.0 ; python_full_version >= '3.10'
-    # via streamlit
-jinja2==3.1.6
-    # via
-    #   altair
-    #   pydeck
 jsonschema==4.25.1 ; python_full_version < '3.10'
-    # via
-    #   -r requirements.txt
-    #   altair
+    # via -r requirements.txt
 jsonschema==4.26.0 ; python_full_version >= '3.10'
-    # via
-    #   -r requirements.txt
-    #   altair
+    # via -r requirements.txt
 jsonschema-specifications==2025.9.1
     # via jsonschema
-markupsafe==3.0.4
-    # via jinja2
-narwhals==2.21.0 ; python_full_version < '3.10'
-    # via altair
-narwhals==2.29.0 ; python_full_version >= '3.10'
-    # via altair
 numpy==2.0.2 ; python_full_version < '3.10'
     # via
     #   -r requirements.txt
     #   opencv-python-headless
-    #   pandas
-    #   pydeck
-    #   streamlit
 numpy==2.2.6 ; python_full_version == '3.10.*'
     # via
     #   -r requirements.txt
     #   opencv-python-headless
-    #   pandas
-    #   pydeck
-    #   streamlit
 numpy==2.4.6 ; python_full_version == '3.11.*'
     # via
     #   -r requirements.txt
     #   opencv-python-headless
-    #   pandas
-    #   pydeck
-    #   streamlit
 numpy==2.5.5 ; python_full_version >= '3.12'
     # via
     #   -r requirements.txt
     #   opencv-python-headless
-    #   pandas
-    #   pydeck
-    #   streamlit
 opencv-python-headless==5.1.0.95
     # via -r requirements.txt
-packaging==25.0 ; python_full_version < '3.10'
-    # via
-    #   altair
-    #   pytest
-    #   streamlit
-packaging==26.3 ; python_full_version >= '3.10'
-    # via
-    #   altair
-    #   pytest
-    #   streamlit
-pandas==2.3.3 ; python_full_version < '3.11'
-    # via streamlit
-pandas==3.1.1 ; python_full_version >= '3.11'
-    # via streamlit
+packaging==26.3
+    # via pytest
 pillow==11.3.0 ; python_full_version < '3.10'
-    # via
-    #   -r requirements.txt
-    #   streamlit
+    # via -r requirements.txt
 pillow==12.3.0 ; python_full_version == '3.10.*'
-    # via
-    #   -r requirements.txt
-    #   streamlit
+    # via -r requirements.txt
 pillow==13.0.0 ; python_full_version >= '3.11'
-    # via
-    #   -r requirements.txt
-    #   streamlit
+    # via -r requirements.txt
 pluggy==1.6.0 ; python_full_version < '3.10'
     # via pytest
 pluggy==1.7.0 ; python_full_version >= '3.10'
     # via pytest
-protobuf==6.33.6 ; python_full_version < '3.10'
-    # via streamlit
-protobuf==7.36.2 ; python_full_version >= '3.10'
-    # via streamlit
-pyarrow==21.0.0 ; python_full_version < '3.10'
-    # via streamlit
-pyarrow==25.0.1 ; python_full_version == '3.10.*'
-    # via streamlit
-pyarrow==26.0.1 ; python_full_version >= '3.11'
-    # via streamlit
 pyasn1==0.6.5
     # via pyasn1-modules
 pyasn1-modules==0.4.2
@@ -213,28 +130,16 @@ pydantic-core==2.46.5 ; python_full_version < '3.10'
     # via pydantic
 pydantic-core==2.50.5 ; python_full_version >= '3.10'
     # via pydantic
-pydeck==0.9.3
-    # via streamlit
 pygments==2.21.0
     # via pytest
 pytest==8.4.2 ; python_full_version < '3.10'
     # via -r requirements.txt
 pytest==9.2.0 ; python_full_version >= '3.10'
     # via -r requirements.txt
-python-dateutil==3.0.0 ; python_full_version < '3.11'
-    # via pandas
-python-dateutil==4.0.0 ; python_full_version >= '3.11'
-    # via pandas
 python-dotenv==1.2.1 ; python_full_version < '3.10'
     # via -r requirements.txt
 python-dotenv==1.2.4 ; python_full_version >= '3.10'
     # via -r requirements.txt
-python-multipart==0.0.32 ; python_full_version == '3.10.*'
-    # via streamlit
-python-multipart==0.0.34 ; python_full_version >= '3.11'
-    # via streamlit
-pytz==2026.6 ; python_full_version < '3.11'
-    # via pandas
 pyyaml==6.0.3 ; python_full_version < '3.10'
     # via -r requirements.txt
 pyyaml==6.0.4 ; python_full_version >= '3.10'
@@ -251,13 +156,11 @@ requests==2.32.5 ; python_full_version < '3.10'
     # via
     #   -r requirements.txt
     #   google-genai
-    #   streamlit
 requests==2.34.2 ; python_full_version >= '3.10'
     # via
     #   -r requirements.txt
     #   google-auth
     #   google-genai
-    #   streamlit
 rpds-py==0.27.1 ; python_full_version < '3.10'
     # via
     #   jsonschema
@@ -270,79 +173,40 @@ rpds-py==2026.9.1 ; python_full_version >= '3.11'
     # via
     #   jsonschema
     #   referencing
-six==1.17.0 ; python_full_version < '3.11'
-    # via python-dateutil
-smmap==5.0.3 ; python_full_version < '3.10'
-    # via gitdb
 sniffio==1.3.1 ; python_full_version >= '3.10'
     # via google-genai
-starlette==1.7.0 ; python_full_version == '3.10.*'
-    # via streamlit
-starlette==1.10.0 ; python_full_version >= '3.11'
-    # via streamlit
-streamlit==1.50.0 ; python_full_version < '3.10'
-    # via -r requirements.txt
-streamlit==1.65.0 ; python_full_version == '3.10.*'
-    # via -r requirements.txt
-streamlit==1.67.0 ; python_full_version >= '3.11'
-    # via -r requirements.txt
 tenacity==9.1.2 ; python_full_version < '3.10'
-    # via
-    #   google-genai
-    #   streamlit
+    # via google-genai
 tenacity==9.1.4 ; python_full_version >= '3.10'
     # via google-genai
-toml==0.10.2 ; python_full_version < '3.11'
-    # via streamlit
 tomli==2.5.0 ; python_full_version < '3.11'
     # via pytest
-tornado==6.5.10 ; python_full_version < '3.10'
-    # via streamlit
 truststore==0.10.5 ; python_full_version >= '3.11' and sys_platform != 'emscripten'
     # via
     #   httpcore2
     #   httpx2
 typing-extensions==4.16.0
     # via
-    #   altair
     #   anyio
     #   cryptography
     #   exceptiongroup
-    #   gitpython
     #   google-genai
     #   httpx2
     #   pydantic
     #   pydantic-core
     #   referencing
-    #   starlette
-    #   streamlit
     #   typing-inspection
-    #   uvicorn
 typing-inspection==0.4.2 ; python_full_version < '3.10'
     # via pydantic
 typing-inspection==0.4.5 ; python_full_version >= '3.10'
     # via pydantic
-tzdata==2026.6
-    # via
-    #   pandas
-    #   python-dateutil
 urllib3==2.6.3 ; python_full_version < '3.10'
     # via requests
 urllib3==2.8.0 ; python_full_version >= '3.10'
     # via requests
-uvicorn==0.54.0 ; python_full_version >= '3.10'
-    # via streamlit
-watchdog==6.0.0 ; python_full_version < '3.11' and sys_platform != 'darwin'
-    # via streamlit
-watchdog==7.1.1 ; python_full_version >= '3.11' and sys_platform != 'darwin'
-    # via streamlit
 websockets==15.0.1 ; python_full_version < '3.10'
     # via google-genai
 websockets==16.1.1 ; python_full_version == '3.10.*'
-    # via
-    #   google-genai
-    #   streamlit
+    # via google-genai
 websockets==17.4 ; python_full_version >= '3.11'
-    # via
-    #   google-genai
-    #   streamlit
+    # via google-genai

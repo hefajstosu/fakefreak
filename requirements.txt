@@ -1,12 +1,12 @@
-# Core runtime: pipeline, evaluation and the Streamlit demo (Python 3.9+)
+# Direct dependencies (Python 3.9+). Install the pinned set: pip install -r requirements.lock
+# Regenerate it after a change: uv pip compile requirements.txt --universal --python-version 3.9 --no-header -o requirements.lock
 numpy
-pillow
-opencv-python-headless      # video frame sampling; also imported by the assembler
-jsonschema                  # validate case_input / profile / variant JSON against schemas/
+pillow                      # images: dedup hashes, page image kit
+opencv-python-headless      # video keyframes, faces (YuNet + SFace, likeness report)
+jsonschema                  # validate case_input / profile / variant against schemas/
 pyyaml
 python-dotenv
 google-genai                # Gemini client (src/ads/llm/client.py)
-requests                    # live URL scan and the demo's URL field
-streamlit                   # demonstrator (src/ads/app.py)
+requests                    # live URL scan, public registries (RDAP, DNS, certificate logs, Wayback)
 imageio-ffmpeg              # bundled ffmpeg for audio extraction (src/ads/preprocess/transcribe.py)
 pytest

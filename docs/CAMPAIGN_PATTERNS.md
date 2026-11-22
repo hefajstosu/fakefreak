@@ -1,8 +1,8 @@
 # Campaign patterns found in the sample cases
 
 Abstract patterns only: the sample material may not be redistributed, so this file names no domains, people, products,
-tracker IDs or page titles. Numbers are from the 10 sample cases (`python -m ads.features`, `ads.evaluate`,
-`ads.quality`, `ads.explain --campaigns`, and the facts written by `python -m ads.preprocess.enrich --domain-meta`).
+tracker IDs or page titles. Numbers are from the 10 sample cases (`python -m ads.evaluation.features`, `ads.evaluation.evaluate`,
+`ads.evaluation.quality`, `ads.explain --campaigns`, and the facts written by `python -m ads.preprocess.enrich --domain-meta`).
 
 ## Infrastructure
 1. **Fresh domains.** Three of the seven captured domains were one day old when the ad was recorded; the others were

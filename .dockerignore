@@ -9,8 +9,10 @@ api.txt
 venv
 __pycache__
 *.pyc
+.pytest_cache
 data/raw
 data/cases
+data/uploads
 data/refs
 data/gold/*.local.json
 archive

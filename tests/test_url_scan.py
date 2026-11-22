@@ -1,14 +1,10 @@
 """Tests for the live URL scanner against a local fake site (no real network)."""
-import os
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from ads.preprocess import url_scan as us  # noqa: E402
+from ads.preprocess import url_scan as us
 
 LONG_TEXT = "Fake article text about an investment platform. " * 12
 FINAL = f"""<html><head><title>  Big   News </title>

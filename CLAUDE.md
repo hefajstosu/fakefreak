@@ -1,173 +1,94 @@
 # CLAUDE.md: guide for Claude Code sessions in this repo
 
-> **Working on the similarity? Read `docs/SIMILARITY_BRIEF.md` first** (contract, baseline numbers, commands, hypotheses, guardrails).
-> Similarity logic lives in `src/ads/sim_functions/`, grouping logic in `src/ads/clustering/`; `similarity.py` is a thin wrapper.
-
 ## What this project is
 HackNation 2026 task "Kolekcjoner fejków / Follow the Fake" (NASK). Scam ads come as **cases** (ad screenshot or video,
-landing pages, network logs). An LLM turns each case into a structured **profile**; profiles are compared and
-grouped into **campaigns** by shared narrative, people, templates, persuasion tricks and technical traces.
-Counterfactual **variants** (same scam blueprint, swapped surface details) are generated to test robustness.
-Official goal: link many seemingly independent materials into campaigns through shared traces. It is NOT a fake/real
-classifier. The demonstrator is pass/fail (it must exist, looks do not matter). Everything is in Polish-market
-context; model output is in English, quoted ad text stays Polish.
+landing pages, network logs). Code extracts the technical traces, an LLM the content; the resulting **profiles** are
+compared and grouped into **campaigns** (one operator) and **families** of campaigns (one scheme or tool), with every link
+explained. Synthetic **variants** (same scheme, swapped surface details) are evaluation material. It is NOT a fake/real
+classifier. The panel is pass/fail for the jury (looks do not matter). Polish-market context; model output in English,
+quoted ad text stays Polish; the panel is in Polish.
 
-## Repo map
+## Repo map (read `src/ads/__init__.py` for the package map)
 ```
-prompts/extraction.txt        system prompt: case -> profile JSON (closed enums, rules)
-prompts/alternatives.txt      system prompt: profile -> N counterfactual variants
-schemas/*.schema.json         THE CONTRACTS: case_input, profile, variant (JSON Schema)
-src/ads/preprocess/           assemble.py (manifest -> case_input), har.py (HAR -> traces), video.py (contact sheet),
-                              page_fp.py (page structure MinHash + image kit), domain_meta.py (RDAP/DNS/CT/Wayback/
-                              CERT Polska list, cached in .cache/domain_meta), enrich.py (adds both to existing cases, no LLM),
-                              likeness.py (same face across materials, YuNet+SFace via OpenCV, no names; reported, not
-                              scored; face features only in gitignored .cache/likeness),
-                              transcribe.py (audio -> transcript via LLM), url_scan.py (live URL -> text + traces), faces.py (DeepFace, optional, not installed)
-src/ads/llm/                  client.py (provider-agnostic, disk cache, retries), extract.py, generate.py
-src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
-src/ads/similarity.py         score(a, b): thin wrapper, the contract callers use; calls sim_functions (no logic of its own)
-src/ads/sim_functions/        THE similarity (a teammate owns it): attributes.py (per-attribute similarities), primitives.py,
-                              normalize.py, aggregate.py (weights, null-aware weighted mean), compare.py (compare_all,
-                              similarity_vector, compare_to_variants), embeddings.py (optional E5), evidence.py (strong_links)
-src/ads/clustering/           ALL grouping logic: pairs.py (N x N pair scores, variants), evidence.py (must-link rules),
-                              linkage.py (average-link cluster()), families.py (hierarchy(): campaigns -> families),
-                              assign.py (place a new article), variants.py (load_variants)
-src/ads/paths.py              repository locations (REPO, DATA, CASES, CONFIG, ...) and gold_file(); import paths from here
-src/ads/dedup.py              duplicate detection: image dHash, page-text hash + near-dup sketch, final URL
-src/ads/decision.py           graded decision: duplicate / same_content / confirmed / likely / suggested_family / new_unconfirmed
-                              (each result names its "rule"; must-link evidence with any case confirms, as in clustering)
-src/ads/explain.py            reporting only: why a pair scores what it does, why a campaign holds, why an article joined;
-                              used by the web panel (Dlaczego?, graph tab, report) and `python -m ads.explain`
-src/ads/robustness.py         channel ablation + missing-data tests
-src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
-src/ads/quality.py            the organiser's test replayed: leave-one-out, variants as new material, must-not-link
-src/ads/features.py           per-feature usefulness (coverage, AUC, false hits) against gold
-src/ads/app.py                Streamlit demo
-src/ads/web/                  web panel: server.py (stdlib JSON API on 127.0.0.1) + static/ page; logic in analyze.py (no UI, tested)
-config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
+prompts/, schemas/            LLM prompts; THE CONTRACTS case_input, profile, variant (JSON Schema)
+src/ads/preprocess/           material -> case_input: assemble, har, url_scan, video, transcribe, page_fp, domain_meta,
+                              likeness (same face, report only), enrich (code-owned fields of existing cases, no LLM)
+src/ads/llm/                  client (Gemini, cache, failover), extract, generate + validate (variants)
+src/ads/sim_functions/        THE similarity: features.py (feature table, compare_all), attributes.py, primitives.py,
+                              normalize.py, evidence.py (strong_links), config.py (config/cluster.yaml)
+src/ads/similarity.py         score(a, b): the contract everything else calls
+src/ads/clustering/           pairs, evidence (must-link / family-link rules), linkage, families, assign, variants
+src/ads/explain/              reporting only: pair, campaign, joins (assignment, decision_reasons); python -m ads.explain
+src/ads/analysis/             one new article: case (build_case), compare (analyse), index (cached tables), views
+src/ads/database.py           data/cases: load_profiles, case_meta, first_image, save_case
+src/ads/web/                  server.py (HTTP), api.py (endpoints), uploads.py; static/index.html, style.css, js/*.js
+src/ads/evaluation/           gold.py + evaluate, quality, features, robustness, ablation, bench (python -m ads.evaluation.X)
+config/                       cluster.yaml (weights, ignore list, supporting features), llm.yaml (models, fallbacks)
 data/gold/groups.json         PUBLIC label-only gold; groups.local.json has the detailed notes (gitignored)
-tests/                        synthetic-data tests only (no network, no sample data)
-docs/                         METHODOLOGY.md, DEMO.md, CONTRIBUTING.md (track ownership), LICENSES.md, feature list, Polish originals
-Dockerfile, docker-compose.yml demo image (web panel default, Streamlit profile), tested; requirements.lock = pinned deps;
-                              requirements-optional.txt = heavy extras; .github/workflows/ci.yml = tests on 3 OSes + container
-src/ads/bench.py              scaling benchmark; docs/DEPLOYMENT.md = container, config, security, measured scaling
-archive/                      old local prototype (algorytm.py and its outputs), gitignored; not part of the pipeline
+tests/                        synthetic data only (factory.py builds profiles); pytest.ini sets the paths
+docs/                         METHODOLOGY, DATA_SOURCES, CAMPAIGN_PATTERNS, DEMO, DEPLOYMENT, CONTRIBUTING, LICENSES
+Dockerfile, docker-compose.yml the panel image (tested); requirements.lock pinned deps; .github/workflows/ci.yml
 ```
-Pipeline: raw sample -> `assemble` -> `case_input.json` -> `extract` -> `profile.json` -> `generate` -> `variants.json`
--> `similarity.score` (sim_functions) -> `clustering` -> `evaluate` / demo. Per-case files live in `data/cases/<id>/` (gitignored).
 
-## Run (Windows, Python 3.9, run module commands from `src/`)
+## Run (from `src/`; Python 3.9 on Windows is the team's main setup)
 ```
-pip install -r requirements.txt
-# .env in the repo root:  GEMINI_API_KEY=...   (gitignored; never print, log or commit it)
-cd src
-python -m ads.preprocess.assemble --all
-python -m ads.llm.extract ../data/cases/48/case_input.json ../data/cases/48/profile.json --model gemini-3.1-flash-lite
-python -m ads.llm.generate 48 --n 3 --k 2 --model gemini-3.1-flash-lite
-python -m ads.evaluate --matrix
-python -m ads.ablation
-cd .. && streamlit run src/ads/app.py
-python -m pytest tests          # always run before committing
-docker compose up --build       # same panel in a container (http://127.0.0.1:8000), data/ mounted
+pip install -r ../requirements.lock      # .env in the repo root: GEMINI_API_KEY=... (never print, log or commit it)
+python -m ads.web.server                 # the panel on http://127.0.0.1:8000
+python -m ads.evaluation.evaluate        # also: quality [--sweep], features, robustness channels, ablation, bench
+python -m ads.preprocess.enrich --all --domain-meta   # after assemble, for page fingerprints and domain facts
+cd .. && python -m pytest                # always before committing
 ```
-Sample data goes in `data/raw/do_udostępnienia/`. Per-case manifests (`data/cases/<id>/manifest.json`) and the
-helper scripts in `scripts/` that create them are gitignored; ask the owner for them.
+Raw samples live outside git (`fakes/` or `data/raw/` next to `data/`); manifests point to them relative to `data/`.
 
 ## Rules that matter
-1. **Organiser sample data must never be committed or pushed.** Covered by `.gitignore`: `data/raw/`, `data/cases/*/`,
-   `data/gold/*.local.json`, `data/refs/`, generated fixtures, `scripts/` helpers. Do not copy page text, domains,
-   tracker IDs, sender page names, product names, screenshots or video into tracked files, docs, tests or commit
-   messages. Before every commit run `git diff --cached` and look for such strings. Tests use synthetic data only.
+1. **Organiser sample data must never be committed or pushed** (`.gitignore` covers it). No page text, domains, tracker
+   IDs, page names, product or people names, screenshots or video in tracked files, docs, tests or commit messages.
+   Before every commit run `git diff --cached` and look for such strings.
 2. **Secrets:** `.env` is gitignored. Never echo the key or put it in code, logs, commits or screenshots.
-3. **Schemas are contracts.** Changing a field or an enum value needs all three teammates to agree. If you must,
-   update schema + prompt + `sim_functions/` + tests together.
-4. **Do not tune weights or edit gold labels to make metrics look better.** Report failing constraints honestly.
-   Gold changes need the owner's approval.
-5. **The LLM never identifies people from faces.** Names come from page text/captions or from the (optional) face
-   module. Demographics of unidentified people live only in `non_grouping_attributes` and must never influence
-   similarity (a demographics-only variant must score exactly 1.0 against its parent; checked in `ablation.py`).
-6. **Code, not the model, owns:** technical artifacts, funnel stages, page text in `extracted_text_verbatim`
-   (see `extract.py`). Do not make the model re-type long text; it breaks JSON.
-7. Variants are synthetic data about real people: keep them internal, never publish, always `synthetic: true`.
+3. **Schemas are contracts.** A field or enum change needs all three teammates; update schema, prompt, `sim_functions/`
+   and tests together. Code-owned optional fields (`technical_artifacts.page_fingerprints`) are kept out of the prompt
+   (`extract.CODE_ONLY_TECH_KEYS`) so cached LLM answers stay valid.
+4. **Do not tune weights or edit gold labels to make metrics look better.** Fix weights by analogy before measuring,
+   report failures honestly. Gold changes need the owner's approval.
+5. **No face identification.** The LLM never identifies people from faces; names come from text, captions and
+   transcripts. `likeness.py` compares faces without names, only locally (`.cache/likeness`), and is not scored.
+   Demographics of unidentified people never influence similarity (checked in `evaluation/ablation.py`).
+6. **Code, not the model, owns** technical artifacts, page fingerprints, domain facts, funnel stages and page text in
+   `extracted_text_verbatim` (see `llm/extract.py`).
+7. Variants are synthetic data about real people: internal only, never published.
 
 ## Gemini quota (the main operational trap)
-Free tier = about 20 requests per day per model per project; retries and repair calls count. Quota resets about
-09:00 Warsaw time. The big flash models (3.5/3.7/3.8) were exhausted on day 1. Models that still answered:
-`gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`, `gemini-3-flash-preview`. Responses are cached in `.cache/llm`
-(keyed by prompt, input and model); reruns are free. Run API calls sequentially, not 5 at a time (per-minute limits).
-The client fails over across `fallback_models` (config/llm.yaml) when a model is out of quota and raises `QuotaExhausted`
-(no retries) when all are; an explicit `--model` disables failover. The demo shows a clear message and keeps sample cases working.
-Profiles in `data/cases` come from mixed models, so small differences between them are expected.
+About 20 requests per day per model per project on the free tier; retries and repairs count; resets about 09:00 Warsaw
+time. Models that answered: `gemini-3.1-flash-lite` (default), `gemini-3.5-flash-lite`, `gemini-3-flash-preview`.
+Answers are cached in `.cache/llm` (keyed by prompt, input and model); run calls sequentially. The client fails over
+across `fallback_models` and raises `QuotaExhausted` when all are out; an explicit `--model` disables failover.
 
-## How similarity and grouping work now
-- `score(a, b)` = `sim_functions.compare_all`: weighted, null-aware mean over per-attribute similarities (a feature missing on
-  one side is dropped, not 0). Technical anchors (tracker IDs, redirect domains, DOM/form clues, sponsoring page) are part of
-  the score through their own weights. `strong_links` (from `sim_functions/evidence.py`) is evidence REPORTING only: it never
-  changes the number. `base` equals `score`. A shared tracker therefore no longer lifts a score to 0.9.
-- Grouping (`ads.clustering`) works on the N x N table of `score()` results, not on the per-attribute matrices:
-  1. hard evidence is a must-link (shared tracker ID, same sponsoring page) and so is a pair scoring >= 0.80 (same content);
-     merged first. >= 2 shared endpoint prefixes are a FAMILY link (shared tool, not one operator); shared domains and
-     files are neither;
-  2. average-link merging of the rest while the MEAN score between two groups >= tau (single link chained weak bridges);
-  3. `hierarchy()` groups campaigns into families (same scam type, some member pair >= `family_tau` or a family link);
-  4. `assign()` joins a new article to a group on hard evidence with a member or mean score >= tau.
-- Synthetic variants are extra comparisons only: pass `variants={case_id: [profiles]}` (from `clustering.load_variants`) and a real
-  article's score becomes the best of score(a, b), a vs each variant of b, each variant of a vs b. A variant is never a node
-  or group member and variants are never compared with each other. `variant_gate` (default off; try 0.15) skips variant
-  comparisons for pairs below it that share no hard evidence. Result key `via_variant` ("a:<i>"/"b:<i>"/None) says where a score
-  came from. Wired into the demo (sidebar checkbox) and `python -m ads.evaluate --variants [--gate 0.15]`; `ablation --gate`
-  reports what the gate would lose. Variant files stay in gitignored `data/cases/*/`.
-- Weights, anchor weights and `ignore_values` come from `config/cluster.yaml` via `sim_functions/config.py` (validated: an unknown
-  weight name or a negative weight raises). Keys missing from the file keep the defaults in `aggregate.py`. `thresholds` in the
-  file are not read by any code yet.
-- Not yet used by `score()`: embeddings (`embeddings.E5Embedder`) and rarity weighting (`anchor_stats`); `compare_all` supports both.
-- Thresholds were written for the old score scale. The top gold pair now scores about 0.67, so the demo slider (0.60) and the 0.80
-  "confirmed" cut-off in `decision.py` probably need recalibrating. `decision.py` and the demo do not use `hierarchy()` yet.
+## How similarity and grouping work
+- `score(a, b)`: weighted mean over the features present on both sides (`sim_functions/features.py`); a feature missing
+  on a side, technical traces included, is dropped, not scored 0. Weight-0 features (logos, domain facts) are computed and
+  explained only. `strong_links` states shared traces in words and never changes the number.
+- Campaigns (`clustering`): must-links first (shared tracker ID, sponsoring page, ad campaign ID, domains on one
+  certificate, or a pair scoring >= 0.80), then average link while the MEAN score between groups >= tau (0.6).
+- Families: same scam type and a member pair >= 0.30, or family evidence (>= 2 shared platform endpoints, >= 2 identical
+  page images, the same own tracking template): a shared tool or kit, not proof of one operator.
+- `decision.decide` uses the same rules (every result names its `rule`); `explain/` reproduces every number.
+- Variants are extra comparisons in `pair_scores` only (`via_variant` says where a score came from); never grouped.
+
+## Current status
+- 10 sample cases, 189 fresh variants. Tau 0.6: campaigns vs strict gold P/R/F1 1.00/0.33/0.50, families vs broad gold
+  1.00/0.85/0.92, 6 of 7 ranking constraints (sim(47,14) < sim(47,5) fails). `evaluation.quality`: campaign purity 1.00,
+  no false joins anywhere, families correct 0.90-1.00. Numbers and their history: `docs/METHODOLOGY.md` section 10.
+- Open: same-template pairs 48-61 and 14-47 are not linked as campaigns by content alone; case 14 misses its family
+  (scores 0.25-0.29 < 0.30). Next lever: better text similarity (only stem overlap today).
+- Duplicates: image dHash (6 of 64 bits), page-text hash and sketch, final URL; screenshots at other scroll positions are
+  not caught. Saved panel cases get `meta.json` (`unconfirmed` or `duplicate_of`).
+- Not done: ad-library scheduler (needs a Meta API token), per-campaign thresholds.
 
 ## Python 3.9 / Windows gotchas
-- No same-type nested quotes in f-strings; no `match`; no `X | Y` type unions.
+- No `match`, no `X | Y` type unions, no same-type nested quotes in f-strings.
 - Print non-ASCII with `sys.stdout.reconfigure(encoding="utf-8")`; the default console is cp1250.
-- Paths with Polish letters and very long names exist in the samples; use `os.path` and forward slashes in JSON.
-- `python -I` ignores user site-packages and the working directory; do not use it with these modules.
+- Sample paths contain Polish letters and very long names; use `os.path` and forward slashes in JSON.
 - Git prints LF/CRLF warnings; they are harmless.
-
-## Current status and known issues
-- 10 sample cases extracted. Variants live in `variants_a*.json` / `variants_n*.json` (not only `variants.json`):
-  `clustering.load_all_variants` reads them all, 189 unique, all fresh. `python -m ads.quality` uses them as new material
-  (see METHODOLOGY section 10). Traces missing on one side are dropped (not 0); a pair >= 0.80 joins like hard evidence.
-  Gold: 7 ranking constraints, 6 pass (sim(47,14) < sim(47,5) fails). Two levels at tau 0.6: campaigns vs strict gold
-  P/R/F1 1.00/0.33/0.50, families (hierarchy) vs broad gold 1.00/0.85/0.92. `python -m ads.quality`: campaign purity 1.00,
-  no false joins, families correct 0.90-1.00 (METHODOLOGY section 10). The variant gate and variant wiring are not yet measured (no variants locally).
-- Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
-- Findings from `ads.robustness` (measured on the OLD placeholder similarity, NOT re-run on `sim_functions`; tau 0.55, 10 gold cases; weights are guesses, so treat as indicative):
-  * Infrastructure and scam type + topic carry the grouping: switching either off drops recall sharply.
-  * Switching off text, entities or props/amounts RAISES recall: surface features dilute pairs that share a template or
-    infrastructure, although surface elements are exactly what operators swap. A better similarity should use entity overlap
-    as supporting evidence, not let differences subtract. Switching off templates fixes the failing gold constraint.
-  * Missing data: pages + logs only keep about 80% of partner recall; the ad creative alone scores below the threshold
-    (recall 0) yet its top-1 neighbour is still in the right family. Decide per evidence level: suggest a family when
-    confidence is low, confirm a campaign only with strong evidence. From the ad alone, scam type is unreliable for some
-    cases because it depends on where the funnel ends.
-  * Caveat: reduced-input extractions used gemini-3.5-flash-lite, baseline profiles come from other models.
-- Entity strings are normalised inside `sim_functions/normalize.py` (case, accents, punctuation), not in the profiles.
-- Live URL scan is done (`url_scan.py`): redirect chain, tracker IDs (also from config blobs and first-party scripts),
-  form endpoints, first-party files, and platform endpoint paths (`api:/api/v1/...`) read from up to 3 first-party
-  scripts. Blocks private addresses; does NOT run JavaScript, so pixels injected only at runtime are missed.
-  Offline replay on the saved sample pages recovered the same pixel and the same platform endpoints as the recorded
-  logs. Shared platform endpoints prove a shared landing-page tool, not necessarily one operator; similarity needs
-  >=2 shared endpoint prefixes before treating them as evidence. The demo uses the scan for the URL field.
-- Duplicates and graded decisions are in (`dedup.py`, `decision.py`, used by the demo). Image dHash threshold is 6 of 64
-  bits: on the sample images the closest unrelated pair was 9 bits apart, so no false positives, but screenshots of the
-  same ad at different scroll positions differ by 17-36 bits and are NOT caught (they fall through to similarity).
-  Saved web cases get `meta.json` (`status: unconfirmed`, or `duplicate_of`); duplicates are excluded from the database.
-- Not done: face reference set with names (deliberately: names come from text; likeness.py matches faces without
-  names and showed that a likeness does not separate campaigns), per-campaign thresholds, ad-library scheduler.
-- Schema: optional, code-owned `technical_artifacts.page_fingerprints` (both schemas); kept out of the LLM prompt
-  (`extract.CODE_ONLY_TECH_KEYS`). `domain_and_cert_metadata` holds prefixed facts (see domain_meta.py). Variant
-  staleness (`generate.profile_sha`) ignores both, so `enrich` keeps variants fresh. Run `enrich` after `assemble`
-  for old cases; it needs the raw samples (`fakes/`) next to `data/`.
-- The teammates' earlier analysis (entity masking, rarity weighting, per-campaign thresholds, hierarchy) is in git
-  history: `git show 8837ebb:analiza_algorytmu.md`.
 
 ## Working style
 Branch per task, small commits, English commit messages ending with the Co-Authored-By trailer. Keep tests passing.

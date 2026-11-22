@@ -1,14 +1,7 @@
 """ads.evaluation.quality on synthetic profiles: outcomes of new material against known campaigns."""
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from ads.evaluation import quality  # noqa: E402
-from test_similarity import make  # noqa: E402
-
-OTHER = dict(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor")
+from ads.evaluation import quality
+from factory import OTHER, make
 
 
 def test_quality_report_classifies_joins_misses_and_false_joins():

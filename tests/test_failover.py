@@ -1,12 +1,8 @@
 """Tests for model failover and graceful degradation. No network."""
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from ads.llm.client import QuotaExhausted, is_quota_error, with_fallback  # noqa: E402
+from ads.llm.client import QuotaExhausted, is_quota_error, with_fallback
 
 
 def test_moves_to_next_model_when_quota_is_exhausted():
