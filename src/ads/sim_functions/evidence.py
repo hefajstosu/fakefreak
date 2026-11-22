@@ -53,6 +53,14 @@ def strong_links(a: dict, b: dict) -> List[str]:
             continue
         if common:
             out.append(f"{label}: {sorted(common)[0]}")
+    ua, ub = (set(A.url_tokens((p.get("technical_artifacts") or {}).get("redirect_chain", []) +
+                                (p.get("technical_artifacts") or {}).get("urls_and_domains", []))) for p in (a, b))
+    ad_ids = sorted(t for t in ua & ub if t.startswith("adid:"))
+    if ad_ids:
+        out.append(f"same ad campaign ID: {ad_ids[0][6:]}")
+    templates = sorted(t for t in ua & ub if t.startswith("params:"))
+    if templates:
+        out.append(f"same tracking template: {templates[0][7:]}")
     images = set(get(a, "technical_artifacts.page_fingerprints.images") or []) & \
         set(get(b, "technical_artifacts.page_fingerprints.images") or [])
     if len(images) >= MIN_SHARED_IMAGES:

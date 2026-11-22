@@ -33,11 +33,13 @@ const FEATURE = {
   call_to_action: "Wezwanie do działania", embedding: "Streszczenie porównawcze", keywords: "Słowa kluczowe",
   setting_and_props: "Sceneria i rekwizyty", amounts_dates_locations: "Kwoty, daty, miejsca",
   page_structure: "Szkielet strony (HTML, klasy CSS)", page_assets: "Zestaw obrazów strony",
+  url_template: "Szablon śledzenia w adresach URL", logos_and_badges: "Logotypy i oznaczenia",
 };
 const EVIDENCE = {
   tracker: "wspólny identyfikator trackera", endpoint: "wspólne endpointy platformy (sesja/formularz)",
   file: "wspólny charakterystyczny plik strony", domain: "wspólna domena", page: "ta sama strona sponsorująca",
-  images: "wspólne identyczne obrazy strony (ten sam zestaw)", other: "dowód",
+  images: "wspólne identyczne obrazy strony (ten sam zestaw)", adid: "ten sam identyfikator kampanii reklamowej",
+  tracking: "ten sam własny szablon parametrów śledzenia", other: "dowód",
 };
 const MISSING = { a: "brak danych po stronie A", b: "brak danych po stronie B", both: "brak danych po obu stronach",
   unknown: "nie do porównania", supporting: "różne, ale to cecha wspierająca: różnica nie obniża wyniku" };
@@ -48,6 +50,7 @@ const f2 = (x) => (x == null ? "–" : Number(x).toFixed(2));
 const pretty = (v) => (v == null ? "–" : SCAM[v] || String(v).replaceAll("_", " "));
 const evText = (e) => `${EVIDENCE[e.kind] || e.kind}: ${e.value}`;
 const RAW_EVIDENCE = [["shared tracker ID", "tracker"], ["shared session/form endpoint", "endpoint"], ["shared page images", "images"],
+  ["same ad campaign ID", "adid"], ["same tracking template", "tracking"],
   ["shared distinctive script/style file", "file"], ["shared domain", "domain"], ["same sponsoring page", "page"]];
 const evRaw = (s) => {  // a strong_links string from the API -> Polish
   const hit = RAW_EVIDENCE.find(([prefix]) => s.startsWith(prefix));
@@ -243,6 +246,7 @@ function pairView(ex, nameA, nameB) {
   const shared = counted.filter((f) => f.contribution > 0);
   const lost = counted.filter((f) => (f.loss || 0) >= 0.015).sort((x, y) => y.loss - x.loss);
   const missing = ex.features.filter((f) => f.contribution == null && f.missing && f.missing !== "both");
+  const info = ex.features.filter((f) => f.informative);
   const row = (f, cells) => el("tr", {}, [el("th", { scope: "row" }, [el("span", { class: "sw", style: `background:${GROUP[f.group][1]}` }), FEATURE[f.feature] || f.feature]), ...cells]);
   return el("div", { class: "explain" }, [
     head, stackBar(ex),
@@ -261,6 +265,8 @@ function pairView(ex, nameA, nameB) {
         el("tbody", {}, lost.map((f) => row(f, [el("td", { class: "num", text: `${Math.round(f.similarity * 100)}%` }),
           el("td", { class: "num", text: `−${f2(f.loss)}` }), el("td", {}, differenceOf(f, nameA, nameB))]))),
       ]))]) : null,
+    info.length ? el("div", { class: "ex-sec" }, [el("h5", { text: "Poza wynikiem (tylko informacyjnie)" }),
+      chips(info.map((f) => `${FEATURE[f.feature] || f.feature}: ${sharedText(f)}`), "tag muted")]) : null,
     missing.length ? el("div", { class: "ex-sec" }, [el("h5", { text: "Pominięte (nie liczone jako różnica)" }),
       chips(missing.map((f) => `${FEATURE[f.feature] || f.feature}: ${MISSING[f.missing]}`), "tag muted")]) : null,
     el("p", { class: "hint", text: "Demografia osób niezidentyfikowanych nigdy nie wpływa na wynik." }),

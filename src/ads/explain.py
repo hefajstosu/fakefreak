@@ -46,6 +46,8 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
     "dom_and_form_clues": ("infrastructure", "anchor", "technical_artifacts.dom_and_form_clues"),
     "ad_library_page_name": ("infrastructure", "enum", "technical_artifacts.ad_library_metadata.page_id_or_name"),
     "page_assets": ("infrastructure", "images", "technical_artifacts.page_fingerprints"),
+    "url_template": ("infrastructure", "url", "technical_artifacts"),
+    "logos_and_badges": ("surface", "names", "visual_and_production.visible_logos_and_badges"),
     "page_structure": ("templates", "structure", "technical_artifacts.page_fingerprints"),
     "scam_type": ("core", "enum", "core_narrative.ad_goal_scam_type"),
     "topic": ("core", "enum", "core_narrative.topic"),
@@ -66,7 +68,8 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
     "amounts_dates_locations": ("surface", "amounts", "entities.amounts_dates_locations"),
 }
 EVIDENCE_KINDS = (("shared tracker ID", "tracker"), ("shared session/form endpoint", "endpoint"),
-                  ("shared page images", "images"),
+                  ("shared page images", "images"), ("same ad campaign ID", "adid"),
+                  ("same tracking template", "tracking"),
                   ("shared distinctive script/style file", "file"), ("shared domain", "domain"),
                   ("same sponsoring page", "page"))
 MATCH = 0.5        # a pair of names/values counts as "shared" from this similarity on
@@ -140,6 +143,9 @@ def _values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
         return _greedy(va or [], vb or [], A._person_pair, _person)
     if kind == "names":
         return _greedy(va or [], vb or [], name_similarity)
+    if kind == "url":        # tracking-template tokens of the funnel URLs
+        tok = lambda t: A.url_tokens(((t or {}).get("redirect_chain") or []) + ((t or {}).get("urls_and_domains") or []))  # noqa: E731
+        return _sets(tok(va), tok(vb))
     if kind == "structure":  # page skeletons: the number of pages compared on each side
         return {"pages_a": len((va or {}).get("structure") or []), "pages_b": len((vb or {}).get("structure") or [])}
     if kind == "images":     # page image kits: counts only, hashes mean nothing to a reader
@@ -208,6 +214,8 @@ def pair(a: Dict[str, Any], b: Dict[str, Any], tau: Optional[float] = None) -> D
             row["missing"] = "both" if ea and eb else "a" if ea else "b" if eb else "unknown"
         elif name in cfg["supporting"]["features"]:
             row["missing"] = "supporting"  # a supporting feature that disagrees: dropped, not counted against
+        elif not f["weight"]:
+            row["informative"] = True      # measured and shown, deliberately not in the score (weight 0)
         feats.append(row)
     groups = []
     for key in list(GROUPS) + ["other"]:
@@ -239,7 +247,8 @@ SIGNATURE = (("scam_type", "core_narrative.ad_goal_scam_type"), ("topic", "core_
              ("companies", "entities.companies_or_institutions"), ("impersonated_media", "entities.impersonated_media"),
              ("tracker_ids", "technical_artifacts.tracker_ids"),
              ("redirect_chain_domains", "technical_artifacts.redirect_chain"),
-             ("dom_and_form_clues", "technical_artifacts.dom_and_form_clues"), ("keywords", "core_narrative.keywords"))
+             ("dom_and_form_clues", "technical_artifacts.dom_and_form_clues"), ("keywords", "core_narrative.keywords"),
+             ("logos_and_badges", "visual_and_production.visible_logos_and_badges"))
 
 
 def _member_values(feature: str, raw: Any) -> Dict[str, str]:

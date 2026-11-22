@@ -85,3 +85,21 @@ def test_supporting_feature_counts_a_match_but_drops_a_difference():
     sup = {"features": frozenset(["product_name"]), "min": 0.5}
     assert compare_all(a, b, supporting=sup)["score"] > plain                     # the different product no longer subtracts
     assert compare_all(a, make(), supporting=sup)["score"] == compare_all(a, make())["score"]  # a match counts as before
+
+
+def test_tracking_template_is_family_evidence_and_an_ad_campaign_id_joins_a_campaign():
+    from ads import clustering
+    from ads.sim_functions.attributes import url_tokens
+    own = "https://a.test/p?utm_source=fb&utm_medium=paid&utm_xyz=<value>"
+    std = "https://b.test/p?utm_source=fb&utm_medium=paid&fbclid=<value>"
+    ad = "https://c.test/p?utm_id=120200000000000001&utm_source=fb"
+    assert url_tokens([own]) == ["params:utm_medium,utm_source,utm_xyz"] and url_tokens([std]) == []
+    assert url_tokens([ad]) == ["adid:120200000000000001"]
+    a, b = make(), make(product="Other", text="different words entirely here")
+    a["technical_artifacts"]["redirect_chain"] = [own]
+    b["technical_artifacts"]["redirect_chain"] = [own.replace("a.test", "z.test")]
+    r = score(a, b)
+    assert clustering.is_family_link(r) and not clustering.is_must_link(r) and r["contributions"]["url_template"] > 0
+    a["technical_artifacts"]["redirect_chain"] = [ad]
+    b["technical_artifacts"]["redirect_chain"] = [ad.replace("c.test", "y.test")]
+    assert clustering.is_must_link(score(a, b))

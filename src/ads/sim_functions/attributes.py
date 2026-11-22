@@ -6,6 +6,7 @@ and never look at anything else, so they can be unit-tested one by one.
 from __future__ import annotations
 
 import math
+import re
 from typing import Callable, Optional
 from urllib.parse import urlparse
 
@@ -89,6 +90,11 @@ def setting_and_props(a, b, soft: Optional[Callable] = None) -> Score:
 
 
 def keywords(a, b) -> Score:
+    return set_similarity(a or [], b or [])
+
+
+def logos_and_badges(a, b) -> Score:
+    """Logos, channel bugs, LIVE banners, AI labels seen on the creative (the LLM lists them)."""
     return set_similarity(a or [], b or [])
 
 
@@ -202,6 +208,34 @@ def ad_library_page_name(a, b) -> Score:
     if not a or not b:
         return None
     return name_similarity(a, b)
+
+
+# ---------------------------------------------------------------- tracking URL template
+
+# Parameter names that ad platforms and analytics add to every link: a set made only of these says nothing.
+STANDARD_PARAMS = frozenset({"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id",
+                             "fbclid", "gclid", "ttclid", "wbraid", "gbraid", "msclkid"})
+AD_ID = re.compile(r"^\d{15,}$")
+
+
+def url_tokens(urls) -> list:
+    """Tracking-template tokens of a case's URLs (redirect chain and landing URLs; har.sanitize_url keeps utm values):
+    `params:<sorted names>` when the query uses a name outside the platforms' standard set (an operator's own
+    template), `adid:<id>` for a 15+ digit ad or campaign ID in utm_id / utm_campaign (one ad platform campaign)."""
+    out = set()
+    for raw in urls or []:
+        for u in raw.split(" -> "):
+            q = urlparse(u.split(" [")[0].strip()).query
+            if not q:
+                continue
+            pairs = [kv.split("=", 1) + [""] for kv in q.split("&") if kv]
+            names = sorted({kv[0] for kv in pairs if kv[0]})
+            if names and set(names) - STANDARD_PARAMS:
+                out.add("params:" + ",".join(names))
+            for k, v, *_ in pairs:
+                if k in ("utm_id", "utm_campaign") and AD_ID.match(v):
+                    out.add("adid:" + v)
+    return sorted(out)
 
 
 # ---------------------------------------------------------------- page fingerprints (preprocess/page_fp.py)

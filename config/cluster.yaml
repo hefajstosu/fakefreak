@@ -16,12 +16,14 @@ weights:                       # applied to similarity in [0,1], over features p
   amounts_dates_locations: 0.2
   embedding: 0.8
   page_structure: 0.8          # page skeleton (tag paths, CSS classes); as landing_page_template, its LLM counterpart
+  logos_and_badges: 0.0        # reported in explanations, not scored: a shared channel logo is not evidence
 anchors:                       # exact-match technical artifacts, weighted by rarity log(N/df)
   tracker_ids: 1.0
   redirect_chain_domains: 0.9
   dom_and_form_clues: 0.8
   ad_library_page_name: 0.7
   page_assets: 0.8             # identical large page images (the page kit); as dom_and_form_clues
+  url_template: 0.5            # own tracking parameters / ad campaign IDs in the funnel URLs
 # Supporting features count only when they agree (similarity >= supporting_min); a difference is dropped like missing
 # data instead of lowering the score. Off by default: measured with `python -m ads.quality` (METHODOLOGY section 10).
 supporting_features: []        # e.g. [featured_people, product_name, companies, impersonated_media]

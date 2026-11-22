@@ -25,12 +25,14 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "funnel_stages": 0.3,  # (*)
     "keywords": 0.3,       # (*)
     "page_structure": 0.8,  # (*) same weight as landing_page_template, its LLM counterpart
+    "logos_and_badges": 0.0,  # (*) reported, not scored: a shared TV channel logo is not evidence (gold: 48 > 10)
 }
 # Exact-match technical anchors; computed only when anchor_stats is passed (see below).
 ANCHOR_WEIGHTS: Dict[str, float] = {
     "tracker_ids": 1.0, "redirect_chain_domains": 0.9, "dom_and_form_clues": 0.8,
     "ad_library_page_name": 0.7,
     "page_assets": 0.8,    # same weight as dom_and_form_clues: another first-party trace of how the page was built
+    "url_template": 0.5,   # the operator's own tracking parameters / ad campaign IDs in the funnel URLs
 }
 
 
@@ -99,6 +101,8 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
                                            get(b, "core_narrative.call_to_action"), embed),
         "embedding": A.canonical_comparison_text(a.get("canonical_comparison_text"),
                                                  b.get("canonical_comparison_text"), embed),
+        "logos_and_badges": A.logos_and_badges(get(a, "visual_and_production.visible_logos_and_badges", []),
+                                               get(b, "visual_and_production.visible_logos_and_badges", [])),
         "page_structure": A.page_structure(get(a, "technical_artifacts.page_fingerprints"),
                                            get(b, "technical_artifacts.page_fingerprints")),
     }
@@ -113,6 +117,9 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
                                                       tb.get("dom_and_form_clues"), **kw)
         v["ad_library_page_name"] = A.ad_library_page_name(
             get(ta, "ad_library_metadata.page_id_or_name"), get(tb, "ad_library_metadata.page_id_or_name"))
+        v["url_template"] = A.anchor_similarity(
+            A.url_tokens((ta.get("redirect_chain") or []) + (ta.get("urls_and_domains") or [])),
+            A.url_tokens((tb.get("redirect_chain") or []) + (tb.get("urls_and_domains") or [])), **kw)
         v["page_assets"] = A.anchor_similarity(get(ta, "page_fingerprints.images"), get(tb, "page_fingerprints.images"),
                                                **kw)
     return v
