@@ -47,3 +47,13 @@ def test_ignore_values_are_never_anchor_evidence(tmp_path):
 
 def test_missing_file_means_defaults(tmp_path):
     assert load_config(str(tmp_path / "none.yaml"))["weights"]["scam_type"] == DEFAULT_WEIGHTS["scam_type"]
+
+
+def test_supporting_features_are_validated_and_off_by_default(tmp_path):
+    assert load_config()["supporting"]["features"] == frozenset()
+    cfg = load_config(write(tmp_path, "supporting_features: [product_name]\nsupporting_min: 0.6\n"))
+    assert cfg["supporting"] == {"features": frozenset(["product_name"]), "min": 0.6}
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    with pytest.raises(ValueError):  # another file: load_config caches per path
+        load_config(write(bad, "supporting_features: [no_such_feature]\n"))

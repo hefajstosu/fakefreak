@@ -22,7 +22,7 @@ from .aggregate import (ANCHOR_WEIGHTS, DEFAULT_WEIGHTS, as_profile, compare_pro
 
 def compare_all(a: dict, b: dict, weights: Optional[Dict[str, float]] = None,
                 embed: Optional[Callable] = None, soft: Optional[Callable] = None,
-                anchor_stats: Optional[dict] = None) -> dict:
+                anchor_stats: Optional[dict] = None, supporting: Optional[dict] = None) -> dict:
     """Everything known about the similarity of two profiles, as one JSON-compatible dict:
 
     score          weighted mean over the features present on both sides (None if none are)
@@ -36,9 +36,10 @@ def compare_all(a: dict, b: dict, weights: Optional[Dict[str, float]] = None,
     soft          optional name-similarity hook for same-sector swaps
     anchor_stats  {'n_docs', 'doc_freq', 'ignore'} for rarity-weighted anchors. Anchors are always
                   included; without stats every shared value weighs the same.
+    supporting    {'features', 'min'}: features that count only when they agree (see compare_profiles)
     """
     res = compare_profiles(a, b, weights, embed, soft,
-                           anchor_stats=anchor_stats if anchor_stats is not None else {})
+                           anchor_stats=anchor_stats if anchor_stats is not None else {}, supporting=supporting)
     w = weights or {**DEFAULT_WEIGHTS, **ANCHOR_WEIGHTS}
     total = res.used_weight
     features = {}

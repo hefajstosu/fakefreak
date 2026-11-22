@@ -38,7 +38,7 @@ const EVIDENCE = {
   file: "wspólny charakterystyczny plik strony", domain: "wspólna domena", page: "ta sama strona sponsorująca", other: "dowód",
 };
 const MISSING = { a: "brak danych po stronie A", b: "brak danych po stronie B", both: "brak danych po obu stronach",
-  unknown: "nie do porównania" };
+  unknown: "nie do porównania", supporting: "różne, ale to cecha wspierająca: różnica nie obniża wyniku" };
 const ENUM_FEATURES = new Set(["scam_type", "topic", "ad_creative_template", "landing_page_template", "persuasion_devices", "funnel_stages"]);
 
 const $ = (id) => document.getElementById(id);
@@ -248,7 +248,7 @@ function pairView(ex, nameA, nameB) {
         el("tbody", {}, lost.map((f) => row(f, [el("td", { class: "num", text: `${Math.round(f.similarity * 100)}%` }),
           el("td", { class: "num", text: `−${f2(f.loss)}` }), el("td", {}, differenceOf(f, nameA, nameB))]))),
       ]))]) : null,
-    missing.length ? el("div", { class: "ex-sec" }, [el("h5", { text: "Pominięte (brak danych, nie liczone jako różnica)" }),
+    missing.length ? el("div", { class: "ex-sec" }, [el("h5", { text: "Pominięte (nie liczone jako różnica)" }),
       chips(missing.map((f) => `${FEATURE[f.feature] || f.feature}: ${MISSING[f.missing]}`), "tag muted")]) : null,
     el("p", { class: "hint", text: "Demografia osób niezidentyfikowanych nigdy nie wpływa na wynik." }),
   ]);

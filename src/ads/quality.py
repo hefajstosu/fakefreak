@@ -2,6 +2,7 @@
 the database exactly as in the panel (analyze.compare) and its outcome is checked against the gold labels.
 
     python -m ads.quality [--tau 0.6]
+    python -m ads.quality --sweep          # the same tests for tau 0.30 .. 0.80: where joins start, where false joins start
 
 Three tests, each item ending as correct, missed (a known campaign was not joined) or false join (joined a campaign
 it has no gold relation to):
@@ -43,7 +44,8 @@ def strip_infrastructure(p: dict) -> dict:
     return q
 
 
-def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], related: Set[str]) -> Dict[str, object]:
+def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], related: Set[str],
+            same_campaign: Optional[Set[str]] = None) -> Dict[str, object]:
     """Analyse `profile` against `db` and classify the result. `expected`: cases it should be grouped with (strict
     gold, in db); `related`: cases it may be grouped with without counting as a false join (broad gold)."""
     res = an.compare(profile, None, db, tau, fingerprints={})
@@ -54,7 +56,10 @@ def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], 
         kind = "correct" if joined & expected else "missed"
     else:
         kind = "correct"             # nothing known to join: stayed new (or joined only broadly related cases)
-    return {"outcome": kind, "status": res["decision"]["status"], "joined": sorted(joined), "expected": sorted(expected)}
+    strict = expected if same_campaign is None else same_campaign
+    purity = len(joined & strict) / len(joined) if joined else None  # campaign level: same_scheme cases count as wrong
+    return {"outcome": kind, "status": res["decision"]["status"], "joined": sorted(joined), "expected": sorted(expected),
+            "purity": purity}
 
 
 def summarise(rows: List[dict]) -> Dict[str, object]:
@@ -67,6 +72,8 @@ def summarise(rows: List[dict]) -> Dict[str, object]:
         "join_recall": sum(r["outcome"] == "correct" for r in should_join) / len(should_join) if should_join else float("nan"),
         "false_join_rate": count["false join"] / n if n else float("nan"),
         "stay_new_correct": sum(r["outcome"] == "correct" for r in should_stay) / len(should_stay) if should_stay else float("nan"),
+        "purity": (sum(r["purity"] for r in rows if r["purity"] is not None) /
+                   max(1, sum(r["purity"] is not None for r in rows))),
         "n_should_join": len(should_join), "n_should_stay": len(should_stay), "outcomes": dict(count),
         "statuses": dict(Counter(r["status"] for r in rows)),
     }
@@ -121,25 +128,58 @@ def run(tau: float, profiles: Optional[Dict[str, dict]] = None, gold: Optional[d
     return report
 
 
+SHORT = {"leave-one-out (real cases)": "LOO", "variants, parent known, same infrastructure": "known+same",
+         "variants, parent known, new infrastructure": "known+new", "variants, parent held out, same infrastructure":
+         "held+same", "variants, parent held out, new infrastructure": "held+new"}
+
+
+def sweep(taus, profiles=None, gold=None, variants=None) -> List[Dict[str, object]]:
+    """run() for every tau: per test the share of correct outcomes and of false joins."""
+    profiles = profiles if profiles is not None else require_profiles(load_profiles())
+    gold = gold if gold is not None else json.load(open(gold_file(), encoding="utf-8"))
+    variants = variants if variants is not None else load_all_variants(profiles)
+    rows = []
+    for tau in taus:
+        rep = run(round(tau, 2), profiles, gold, variants)
+        rows.append({"tau": round(tau, 2), "tests": {SHORT.get(k, k): (r["accuracy"], r["false_join_rate"])
+                                                     for k, r in rep.items() if "accuracy" in r},
+                     "purity": {SHORT.get(k, k): r["purity"] for k, r in rep.items() if "purity" in r},
+                     "stay_new": rep["must-not-link (all items that should stay new)"]["stay_new_correct"]})
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Grouping quality on new material: leave-one-out, variants, must-not-link")
     ap.add_argument("--tau", type=float, default=0.6)
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
+    ap.add_argument("--sweep", action="store_true", help="the tests for tau 0.30 .. 0.80 (correct / false joins)")
     a = ap.parse_args()
+    if a.sweep:
+        rows = sweep([0.30 + 0.05 * i for i in range(11)])
+        names = list(rows[0]["tests"])
+        print("correct / false joins per test and tau (stay new = items without a known campaign left new; "
+              "purity = joined cases that are the same campaign in gold, per test)\n")
+        print(f"{'tau':>5}  " + "".join(f"{n:>13}" for n in names) + f"{'stay new':>10}")
+        for r in rows:
+            print(f"{r['tau']:>5.2f}  " + "".join(f"{r['tests'][n][0]:>7.2f}/{r['tests'][n][1]:<5.2f}" for n in names)
+                  + f"{r['stay_new']:>10.2f}   purity " + " ".join(f"{r['purity'][n]:.2f}" for n in names))
+        return
     report = run(a.tau)
     if a.json:
         print(json.dumps(report, indent=2))
         return
     print(f"grouping quality on new material at tau={a.tau}\n")
-    print(f"{'test':<58}{'n':>5}{'acc':>7}{'join rec':>10}{'false join':>12}{'stay new':>10}")
+    print(f"{'test':<58}{'n':>5}{'acc':>7}{'join rec':>10}{'false join':>12}{'purity':>8}{'stay new':>10}")
     for name, r in report.items():
         if "accuracy" not in r:
             print(f"{name:<58}{r['n']:>5}{'':>7}{'':>10}{'':>12}{r['stay_new_correct']:>10.2f}")
             continue
         print(f"{name:<58}{r['n']:>5}{r['accuracy']:>7.2f}{r['join_recall']:>10.2f}{r['false_join_rate']:>12.2f}"
-              f"{r['stay_new_correct']:>10.2f}")
+              f"{r['purity']:>8.2f}{r['stay_new_correct']:>10.2f}")
     print("\nacc = correct outcome; join rec = share of items with a known campaign that joined it; false join = joined a "
-          "campaign with no gold relation; stay new = items without a known campaign left as new.")
+          "campaign with no gold relation (same scheme counts as related); purity = share of the joined cases that are the "
+          "same campaign or template in gold (same scheme counts as wrong here); stay new = items without a known "
+          "campaign left as new.")
 
 
 if __name__ == "__main__":

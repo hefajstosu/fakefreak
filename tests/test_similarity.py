@@ -76,3 +76,12 @@ def test_technical_traces_missing_on_one_side_are_skipped_not_scored_zero():
     r = score(a, b)
     assert "tracker_ids" in r["missing"] and "dom_and_form_clues" in r["missing"] and r["score"] > 0.95
     assert score(a, make(tracker="meta_pixel:222", clues=["POST y.test/api/v2/b/"]))["score"] < r["score"]  # both known, different
+
+
+def test_supporting_feature_counts_a_match_but_drops_a_difference():
+    from ads.sim_functions import compare_all
+    a, b = make(product="AlphaPlat"), make(product="BetaPlat")
+    plain = compare_all(a, b)["score"]
+    sup = {"features": frozenset(["product_name"]), "min": 0.5}
+    assert compare_all(a, b, supporting=sup)["score"] > plain                     # the different product no longer subtracts
+    assert compare_all(a, make(), supporting=sup)["score"] == compare_all(a, make())["score"]  # a match counts as before

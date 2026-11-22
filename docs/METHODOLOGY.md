@@ -149,8 +149,32 @@ change and neither moves the gold metrics (6 of 7 ranking constraints, pairwise 
   such a near-identical article was "confirmed" by the verdict but not joined, because average link compared it with
   every member of a campaign held together by hard evidence.
 The open gap is the last row: a new ad of a known campaign that shares neither infrastructure nor its exact template
-is not linked by content alone. The next steps are entity overlap as supporting rather than subtracting evidence and
-the E5 embeddings for the free-text features, both checked against this table.
+is not linked by content alone.
+
+**Purity and the threshold.** `purity` is the share of the cases an item joined that are the same campaign or
+template in gold (same scheme counts as wrong). `python -m ads.quality --sweep` repeats the table for tau 0.30 to 0.80.
+Lowering tau closes the last row (0.40 at 0.6, 0.80 at 0.40) with no false joins, but what it adds are same-scheme
+cases: purity of known variants falls from 0.80 to 0.59. So a lower tau groups families, not campaigns; families are
+handled by the hierarchy and the "suggested family" verdict, and tau stays at 0.6.
+
+**Entities as supporting evidence** (`supporting_features` in `config/cluster.yaml`, off): people, product, companies
+and outlets count when they agree and are dropped when they differ, because operators swap them on purpose. It widens
+the gap between same-campaign and unrelated pairs (0.45 / 0.09 to 0.50 / 0.11) and costs nothing on any test, but at
+tau 0.6 it does not move the last row, so it stays off until the team decides. With it, tau 0.30 to 0.35 gives 1.00 on
+every row with no false joins, again at family-level purity (0.25 to 0.56).
+
+**Open decision: shared platform endpoints.** Purity on leave-one-out is 0.33 even at tau 0.6. The campaign {1, 2, 48,
+61} is one group only because two or more shared platform endpoint paths are a must-link; gold has {1, 2} and {48, 61}
+as two campaigns of one scheme. A shared landing-page tool is not proof of one operator. Treating endpoints as
+supporting evidence only:
+
+| | strict P / R / F1 | purity (LOO / known variants) | leave-one-out correct | held out, new infrastructure |
+|---|---|---|---|---|
+| endpoints are a must-link (now) | 0.33 / 0.67 / 0.44 | 0.33 / 0.80 | 0.80 | 0.40 |
+| endpoints supporting only | 1.00 / 0.33 / 0.50 | 1.00 / 1.00 | 0.60 | 0.56 |
+
+Neither dominates: campaign-level precision against recall of related campaigns. It is a modelling choice for the
+team (and a question for the organiser: one operator or one tool?), not a parameter to fit on ten cases.
 
 ## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal

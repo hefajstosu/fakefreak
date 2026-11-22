@@ -172,7 +172,7 @@ def pair(a: Dict[str, Any], b: Dict[str, Any], tau: Optional[float] = None) -> D
     (renormalised, like a missing feature). With `tau`, `crosses_tau` says whether switching the group off would
     move the pair across the threshold."""
     cfg = load_config()
-    res = compare_all(a, b, weights=cfg["weights"], anchor_stats=cfg["anchor_stats"])
+    res = compare_all(a, b, weights=cfg["weights"], anchor_stats=cfg["anchor_stats"], supporting=cfg["supporting"])
     ignore = frozenset(cfg["anchor_stats"].get("ignore") or ())
     s, total = round(res["score"] or 0.0, 4), res["used_weight"]
     feats, num, by_group = [], 0.0, {}
@@ -195,6 +195,8 @@ def pair(a: Dict[str, Any], b: Dict[str, Any], tau: Optional[float] = None) -> D
         elif f["similarity"] is None:
             ea, eb = _empty(va), _empty(vb)
             row["missing"] = "both" if ea and eb else "a" if ea else "b" if eb else "unknown"
+        elif name in cfg["supporting"]["features"]:
+            row["missing"] = "supporting"  # a supporting feature that disagrees: dropped, not counted against
         feats.append(row)
     groups = []
     for key in list(GROUPS) + ["other"]:

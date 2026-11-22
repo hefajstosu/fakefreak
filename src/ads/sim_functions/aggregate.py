@@ -114,14 +114,19 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
 
 def compare_profiles(a: dict, b: dict, weights: Optional[Dict[str, float]] = None,
                      embed: Optional[Callable] = None, soft: Optional[Callable] = None,
-                     anchor_stats: Optional[dict] = None) -> Result:
+                     anchor_stats: Optional[dict] = None, supporting: Optional[dict] = None) -> Result:
     """Weighted mean of the feature vector, renormalised over features present on both sides.
 
     Demographics are deliberately absent (weight 0, see attributes.demographics_similarity).
+    supporting: {"features": names, "min": float}. A supporting feature counts only when it agrees (similarity >=
+    min); a disagreement is dropped like missing data. For surface elements operators swap on purpose (people,
+    product, companies, outlets): a match is evidence, a difference is not evidence against.
     """
     w = dict(weights or {**DEFAULT_WEIGHTS, **ANCHOR_WEIGHTS})
     vec = feature_vector(a, b, embed, soft, anchor_stats)
-    used = {k: w.get(k, 0.0) for k, s in vec.items() if s is not None and w.get(k, 0.0) > 0}
+    sup = supporting or {}
+    skip = {k for k in sup.get("features", ()) if vec.get(k) is not None and vec[k] < sup.get("min", 0.5)}
+    used = {k: w.get(k, 0.0) for k, s in vec.items() if s is not None and w.get(k, 0.0) > 0 and k not in skip}
     total = sum(used.values())
     score = sum(w[k] * vec[k] for k in used) / total if total else None
     return Result(vector=vec, score=score, used_weight=total, weights=used)

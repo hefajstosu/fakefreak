@@ -17,7 +17,7 @@ from .sim_functions.evidence import strong_links
 
 def score(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     cfg = load_config()
-    res = compare_all(a, b, weights=cfg["weights"], anchor_stats=cfg["anchor_stats"])
+    res = compare_all(a, b, weights=cfg["weights"], anchor_stats=cfg["anchor_stats"], supporting=cfg["supporting"])
     s = round(res["score"] or 0.0, 4)
     feats = res["features"]
     return {"score": s, "base": s,

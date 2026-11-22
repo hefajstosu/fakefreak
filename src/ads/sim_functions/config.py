@@ -27,8 +27,13 @@ def _build(raw: dict, path: str) -> dict:
     for k, v in {**feature_w, **anchor_w}.items():
         if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
             raise ValueError(f"{path}: weight '{k}' must be a number >= 0, got {v!r}")
+    supporting = raw.get("supporting_features") or []
+    bad = set(supporting) - set(DEFAULT_WEIGHTS)
+    if bad:
+        raise ValueError(f"{path}: unknown supporting feature(s) {sorted(bad)}; valid: {sorted(DEFAULT_WEIGHTS)}")
     return {
         "weights": {**DEFAULT_WEIGHTS, **ANCHOR_WEIGHTS, **feature_w, **anchor_w},
+        "supporting": {"features": frozenset(supporting), "min": float(raw.get("supporting_min", 0.5))},
         "anchor_stats": {"ignore": frozenset(raw.get("ignore_values") or [])},
         "thresholds": dict(raw.get("thresholds") or {}),
         "path": path,
