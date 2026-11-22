@@ -10,10 +10,9 @@
 /prompts/                   @TRACK_B_USER
 /config/llm.yaml            @TRACK_B_USER
 
-/src/ads/features.py        @TRACK_C_USER
-/src/ads/embed.py           @TRACK_C_USER
-/src/ads/cluster.py         @TRACK_C_USER
-/src/ads/store.py           @TRACK_C_USER
+/src/ads/similarity.py      @TRACK_C_USER
+/src/ads/sim_functions/     @TRACK_C_USER
+/src/ads/clustering/        @TRACK_C_USER
 /src/ads/evaluate.py        @TRACK_C_USER
 /data/gold/                 @TRACK_C_USER
 /config/cluster.yaml        @TRACK_C_USER

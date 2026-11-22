@@ -125,7 +125,6 @@ src/ads/sim_functions/           attributes.py per-attribute similarities, primi
                                  weighted mean, compare.py compare_all/similarity_vector/compare_to_variants, embeddings.py,
                                  evidence.py strong_links (reporting only)
 src/ads/clustering/              pairs.py, evidence.py (must-link), linkage.py, families.py, assign.py, variants.py
-src/ads/cluster.py               re-export only
 src/ads/decision.py              graded decision (duplicate / same content / confirmed / likely / suggested family / new)
 src/ads/evaluate.py              gold metrics; src/ads/robustness.py channels + missing data; src/ads/ablation.py variants
 src/ads/app.py                   Streamlit demo; the sidebar slider is the `likely` threshold

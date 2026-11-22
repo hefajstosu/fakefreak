@@ -6,7 +6,7 @@ Three tracks, one directory set each, one shared contract layer. See the plan fo
 |---|---|---|---|
 | A: data and preprocessing | `src/ads/preprocess/`, `data/cases/`, `data/refs/`, `config/preprocess.yaml` | `case_input.json` | raw samples |
 | B: LLM layer | `src/ads/llm/`, `src/ads/validate.py`, `prompts/`, `config/llm.yaml` | `profile.json`, variants | `case_input.json` |
-| C: similarity and evaluation | `src/ads/{features,embed,cluster,store,evaluate}.py`, `data/gold/`, `config/cluster.yaml` | scores, groups, metrics | profiles and variants |
+| C: similarity and evaluation | `src/ads/similarity.py`, `src/ads/sim_functions/`, `src/ads/clustering/`, `src/ads/evaluate.py`, `data/gold/`, `config/cluster.yaml` | scores, groups, metrics | profiles and variants |
 
 Shared and changed only by a pull request that all three approve: `schemas/`, `docs/`, `requirements.txt`.
 

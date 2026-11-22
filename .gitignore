@@ -27,3 +27,6 @@ scripts/make_manifests.py
 scripts/fetch_refs.py
 data/refs/categories.json
 data/refs/SOURCES.md
+
+# Old prototype (algorytm.py and its outputs), kept locally only
+archive/

@@ -14,7 +14,7 @@ raw sample (screenshot / video / saved pages / HAR)
   -> generate   (src/ads/llm/generate.py)          variants.json     [schemas/variant.schema.json]
   -> similarity (src/ads/similarity.py: score)     score + per-feature contributions + strong links
   -> dedup      (src/ads/dedup.py)                 duplicate of an existing case? (image hash, page text, URL)
-  -> cluster    (src/ads/cluster.py)               groups / "new campaign"
+  -> clustering (src/ads/clustering/)              campaigns, families / "new campaign"
   -> decision   (src/ads/decision.py)              duplicate / same content / confirmed / likely / suggested family / unconfirmed
   -> evaluate   (src/ads/evaluate.py, ablation.py) metrics against data/gold
   -> demo       (src/ads/app.py)                   Streamlit

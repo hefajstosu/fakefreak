@@ -21,7 +21,7 @@ anchors:                       # exact-match technical artifacts, weighted by ra
   dom_and_form_clues: 0.8
   ad_library_page_name: 0.7
 ignore_values: []              # mass-infrastructure values (exact strings) never used as anchor evidence; read by sim_functions/config.py
-thresholds:
+thresholds:                    # parsed by sim_functions/config.py but not used by any code yet (the demo slider sets tau)
   global_tau: 0.60
   k_sigma: 2.0
   min_members_for_calibration: 3

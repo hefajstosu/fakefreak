@@ -1,7 +1,7 @@
 # CLAUDE.md: guide for Claude Code sessions in this repo
 
 > **Working on the similarity? Read `docs/SIMILARITY_BRIEF.md` first** (contract, baseline numbers, commands, hypotheses, guardrails).
-> Similarity logic lives in `src/ads/sim_functions/`, grouping logic in `src/ads/clustering/`; `similarity.py` and `cluster.py` are thin wrappers.
+> Similarity logic lives in `src/ads/sim_functions/`, grouping logic in `src/ads/clustering/`; `similarity.py` is a thin wrapper.
 
 ## What this project is
 HackNation 2026 task "Kolekcjoner fejków / Follow the Fake" (NASK). Scam ads come as **cases** (ad screenshot or video,
@@ -28,7 +28,7 @@ src/ads/sim_functions/        THE similarity (a teammate owns it): attributes.py
 src/ads/clustering/           ALL grouping logic: pairs.py (N x N pair scores, variants), evidence.py (must-link rules),
                               linkage.py (average-link cluster()), families.py (hierarchy(): campaigns -> families),
                               assign.py (place a new article), variants.py (load_variants)
-src/ads/cluster.py            re-exports assign/cluster/pair_scores from clustering/ for older callers; add no logic here
+src/ads/paths.py              repository locations (REPO, DATA, CASES, CONFIG, ...) and gold_file(); import paths from here
 src/ads/dedup.py              duplicate detection: image dHash, page-text hash + near-dup sketch, final URL
 src/ads/decision.py           graded decision: duplicate / same_content / confirmed / likely / suggested_family / new_unconfirmed
 src/ads/robustness.py         channel ablation + missing-data tests
@@ -39,6 +39,7 @@ data/gold/groups.json         PUBLIC label-only gold; groups.local.json has the 
 tests/                        synthetic-data tests only (no network, no sample data)
 docs/                         METHODOLOGY.md, DEMO.md, CONTRIBUTING.md (track ownership), LICENSES.md, feature list, Polish originals
 Dockerfile, .dockerignore     demo image (UNTESTED: no Docker daemon was available); requirements-optional.txt = heavy extras
+archive/                      old local prototype (algorytm.py and its outputs), gitignored; not part of the pipeline
 ```
 Pipeline: raw sample -> `assemble` -> `case_input.json` -> `extract` -> `profile.json` -> `generate` -> `variants.json`
 -> `similarity.score` (sim_functions) -> `clustering` -> `evaluate` / demo. Per-case files live in `data/cases/<id>/` (gitignored).
