@@ -36,7 +36,8 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .status b { color: var(--ink); }
 .status .warn { color: var(--warn); }
 
-main { display: grid; gap: 24px; padding-block: 24px 48px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 48px; }
+main > * { min-width: 0; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
 
 form { margin-top: 14px; display: grid; gap: 12px; }
@@ -91,7 +92,7 @@ td.num { font-family: var(--mono); white-space: nowrap; }
 .links { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .links .ev { color: var(--bad); }
 
-.cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
 .case { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-width: 0; }
 .case.noimg { grid-template-columns: 1fr; }
 .case img { width: 96px; height: 128px; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); }
