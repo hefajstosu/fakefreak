@@ -41,9 +41,6 @@ def variant_to_profile(parent: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, A
     return p
 
 
-CODE_OWNED_EVIDENCE = ("page_fingerprints", "domain_and_cert_metadata")
-
-
 def profile_sha(case_id: str) -> str:
     """Identity of the profile a variant was generated from. Evidence that code adds later (page fingerprints, domain
     metadata; see preprocess/enrich.py) is left out: variants inherit technical artifacts and never change them, so

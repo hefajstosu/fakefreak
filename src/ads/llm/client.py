@@ -145,7 +145,7 @@ class GeminiClient(LLMClient):
         if not key:
             raise RuntimeError(f"{api_key_env} is not set (put it in .env)")
         # Without a timeout one stalled connection can hang a request forever; a timeout is retried like a 503.
-        self._genai, self._client = genai, genai.Client(api_key=key, http_options=genai.types.HttpOptions(timeout=90_000))
+        self._client = genai.Client(api_key=key, http_options=genai.types.HttpOptions(timeout=90_000))
 
     def _call(self, system: str, parts: List[Part]) -> str:
         return with_fallback(self.models, lambda m: self._call_model(m, system, parts))

@@ -8,7 +8,7 @@ from ..sim_functions import attributes as A
 from ..sim_functions import get
 from ..sim_functions.evidence import GENERIC_FILES
 from ..sim_functions.normalize import norm
-from .catalog import FEATURES, GROUPS
+from .catalog import FEATURES
 from .values import person
 
 Scores = Dict[Tuple[str, str], Dict[str, Any]]
