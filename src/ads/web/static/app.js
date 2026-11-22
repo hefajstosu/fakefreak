@@ -720,7 +720,7 @@ function showResult(r) {
     el("span", { class: `stamp ${cls}`, text: stamp }),
     el("strong", { text: heading }),
     el("p", { text: reasonLines(r)[0] }),
-    notes.length ? el("p", { class: "notes", text: `Skan strony: ${notes.join("; ")}` }) : null,
+    notes.length ? el("p", { class: "notes", text: `Uwagi z wczytania: ${notes.join("; ")}` }) : null,
   ].filter(Boolean));
   $("reasons").replaceChildren(el("h5", { text: "Dlaczego taki werdykt: szczegóły" }),
     el("ul", { class: "reason-list" }, reasonLines(r).slice(1).map((l) => el("li", { text: l }))));
@@ -747,25 +747,84 @@ function showResult(r) {
   $("result").hidden = false;
 }
 
+// ---------------------------------------------------------------- uploaded files of the article
+const KIND = {  // extension -> [label, accepted]
+  png: ["zrzut", true], jpg: ["zrzut", true], jpeg: ["zrzut", true], webp: ["zrzut", true], gif: ["zrzut", true],
+  html: ["strona HTML", true], htm: ["strona HTML", true], har: ["log sieci HAR", true], txt: ["tekst", true],
+  mp4: ["wideo", true], mov: ["wideo", true], webm: ["wideo", true], m4v: ["wideo", true],
+};
+const MAX_UPLOAD_MB = 200;
+let chosen = [];
+
+const kindOf = (f) => KIND[(f.name.split(".").pop() || "").toLowerCase()] || ["nieobsługiwany", false];
+const sizeText = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} kB`);
+
+function renderFiles() {
+  $("file-list").replaceChildren(...chosen.map((f, i) => {
+    const [label, ok] = kindOf(f);
+    const rm = el("button", { type: "button", "aria-label": `Usuń ${f.name}`, text: "usuń" });
+    rm.addEventListener("click", () => { chosen.splice(i, 1); renderFiles(); });
+    return el("li", {}, [el("span", { class: "fname", text: f.name }), el("span", { class: "fkind" + (ok ? "" : " bad"), text: label }),
+      el("span", { class: "fsize", text: sizeText(f.size) }), rm]);
+  }));
+}
+
+function addFiles(list) {
+  for (const f of list) {
+    if (!chosen.some((c) => c.name === f.name && c.size === f.size)) chosen.push(f);
+  }
+  renderFiles();
+}
+
+$("drop").addEventListener("click", () => $("files").click());
+$("drop").addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); $("files").click(); } });
+$("files").addEventListener("change", () => { addFiles($("files").files); $("files").value = ""; });
+for (const name of ["dragenter", "dragover"]) {
+  $("drop").addEventListener(name, (ev) => { ev.preventDefault(); $("drop").classList.add("over"); });
+}
+for (const name of ["dragleave", "drop"]) {
+  $("drop").addEventListener(name, (ev) => { ev.preventDefault(); $("drop").classList.remove("over"); });
+}
+$("drop").addEventListener("drop", (ev) => addFiles(ev.dataTransfer.files));
+
+async function postForm(path, fields, files) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, String(v));
+  for (const f of files) form.append("files", f, f.name);
+  const res = await fetch(path, { method: "POST", body: form });
+  const data = await res.json().catch(() => ({ error: `Błąd serwera (${res.status})` }));
+  if (!res.ok) throw new Error(data.error || `Błąd serwera (${res.status})`);
+  return data;
+}
+
 $("analyse-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const url = $("url").value.trim();
   const text = $("text").value.trim();
+  const files = chosen.filter((f) => kindOf(f)[1]);
   const msg = $("form-msg");
-  if (!url && !text) {
+  if (!url && !text && !files.length) {
     msg.className = "message error";
-    msg.textContent = "Podaj adres URL albo wklej tekst artykułu.";
+    msg.textContent = "Podaj adres URL, wklej tekst artykułu albo dodaj jego pliki.";
+    return;
+  }
+  const total = files.reduce((n, f) => n + f.size, 0);
+  if (total > MAX_UPLOAD_MB * 1e6) {
+    msg.className = "message error";
+    msg.textContent = `Pliki mają razem ${sizeText(total)}; limit to ${MAX_UPLOAD_MB} MB.`;
     return;
   }
   $("analyse-btn").disabled = true;
   msg.className = "message busy";
-  msg.textContent = "Pobieram stronę i porównuję z bazą…";
+  msg.textContent = files.length ? `Wysyłam ${files.length} plik(ów) (${sizeText(total)}), czytam je i porównuję z bazą…`
+    : "Pobieram stronę i porównuję z bazą…";
   try {
-    const r = await api("/api/analyze", { url, text, tau: tau() });
+    const r = files.length ? await postForm("/api/analyze", { url, text, tau: tau() }, files)
+      : await api("/api/analyze", { url, text, tau: tau() });
     analysisId = r.id;
     joined = r.joins;
     lastResult = r;
-    lastInput = url;
+    lastInput = [url, ...files.map((f) => f.name)].filter(Boolean).join(", ");
     showResult(r);
     msg.className = "message";
     msg.textContent = "";

@@ -33,47 +33,107 @@ CAPTURE_REASONS = ("near-identical image", "same final URL")  # the same capture
 
 # ---------------------------------------------------------------- step 1: material -> case_input
 
-def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_files: Sequence[str] = (),
-               product: str = "", text_role: str = "bridge_page",
-               domain_meta: bool = True) -> Tuple[Optional[Dict[str, Any]], List[str]]:
-    """In-memory case_input from what an analyst has: a URL (scanned for text and technical traces), pasted text,
-    screenshot paths, saved HTML pages and a product name. Returns (None, notes) when nothing usable is given.
-    With `domain_meta` the scanned domains get public registration, hosting and certificate facts.
+UPLOAD_KINDS = {".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
+                ".html": "html", ".htm": "html", ".har": "har", ".txt": "text",
+                ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video"}
+MAX_CREATIVES = 6  # screenshots sent to the LLM as the ad creative; more would cost tokens without new information
 
-    Screenshots become the ad creative, each HTML file a bridge page, and the scanned plus pasted text one more page
-    with role `text_role` (default: a bridge page, i.e. the fake article)."""
+
+def classify_files(paths: Sequence[str]) -> Dict[str, List[str]]:
+    """Uploaded files by kind (image, html, har, text, video, unsupported), from their extension."""
+    out: Dict[str, List[str]] = {}
+    for p in paths:
+        out.setdefault(UPLOAD_KINDS.get(os.path.splitext(p)[1].lower(), "unsupported"), []).append(p)
+    return out
+
+
+def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_files: Sequence[str] = (),
+               product: str = "", text_role: str = "bridge_page", domain_meta: bool = True,
+               hars: Sequence[str] = (), videos: Sequence[str] = (), text_files: Sequence[str] = (),
+               work_dir: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """In-memory case_input from what an analyst has: a URL (scanned for text and technical traces), pasted text,
+    screenshots, saved HTML pages, HAR network logs, videos, text files and a product name. Returns (None, notes)
+    when nothing usable is given. With `domain_meta` the domains found get public registration, hosting and
+    certificate facts.
+
+    Screenshots (at most MAX_CREATIVES) and video contact sheets become the ad creative, each HTML or text file a bridge
+    page, and the scanned plus pasted text one more page with role `text_role` (default: a bridge page, i.e. the fake
+    article). HAR logs give the technical traces (preprocess/har.py) and, with the pages, the page fingerprints.
+    Video contact sheets are written to `work_dir`."""
+    from .preprocess import page_fp
     notes: List[str] = []
-    tech = dict(EMPTY_TECH)
+    tech: Dict[str, Any] = {k: list(v) for k, v in EMPTY_TECH.items()}
+    fps = []
     page_text = text.strip()
     if url.strip():
         from .preprocess.url_scan import scan_url
         scan = scan_url(url.strip())
         if scan["ok"]:
             page_text = "\n".join(t for t in (scan["text"], page_text) if t)
+            fps.append(scan["technical_summary"].pop("page_fingerprints", {}))
             tech = scan["technical_summary"]
             notes += scan["notes"]
             if scan["final_url"].rstrip("/") != url.strip().rstrip("/"):
                 notes.append(f"redirected to {scan['final_url']}")
-            if domain_meta:  # public registries only (RDAP, DNS, certificate logs, archive); failures leave it out
-                try:
-                    from .preprocess import domain_meta as dm
-                    tech = dict(tech, domain_and_cert_metadata=dm.case_metadata(tech, captured=dm.today()))
-                except Exception as e:  # noqa: BLE001
-                    notes.append(f"domain metadata unavailable: {str(e)[:80]}")
         else:
             notes.append(f"could not fetch the page: {scan['error']}")
+    if hars:
+        from .preprocess import har as harmod
+        for h in hars:
+            try:
+                harmod.process(h, tech)
+                fps.append(page_fp.from_har(h))
+            except (ValueError, KeyError, OSError) as e:
+                notes.append(f"could not read the network log {os.path.basename(h)}: {str(e)[:80]}")
+    if domain_meta and (tech["urls_and_domains"] or tech["redirect_chain"]):
+        try:  # public registries only (RDAP, DNS, certificate logs, archive); failures leave it out
+            from .preprocess import domain_meta as dm
+            captured = dm.capture_date({"hars": list(hars)}, "") if hars else dm.today()
+            tech["domain_and_cert_metadata"] = dm.case_metadata(tech, captured=captured or dm.today())
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"domain metadata unavailable: {str(e)[:80]}")
     if product.strip():
         page_text = f"Product or platform named by the analyst: {product.strip()}\n" + page_text
+    creatives = list(images)
+    if len(creatives) > MAX_CREATIVES:
+        notes.append(f"{len(creatives)} images given: the first {MAX_CREATIVES} are analysed as the ad creative")
+        creatives = creatives[:MAX_CREATIVES]
+    for v in videos:
+        try:
+            from .preprocess import video as videomod
+            samples, _ = videomod.sample_frames(v, 48, 0.0, 0.0, None)
+            sheet = os.path.join(work_dir or os.path.dirname(v), os.path.splitext(os.path.basename(v))[0] + "_sheet.jpg")
+            videomod.make_contact_sheet(videomod.pick_keyframes(samples), sheet)
+            creatives.append(sheet)
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"could not read the video {os.path.basename(v)}: {str(e)[:80]}")
     parts: List[Dict[str, Any]] = []
-    if images:
-        parts.append({"role": "ad_creative", "medium": "image", "text": None, "images": list(images)})
+    if creatives:
+        parts.append({"role": "ad_creative", "medium": "image", "text": None, "images": creatives})
     if html_files:
         from .preprocess.assemble import html_to_text
         parts += [{"role": "bridge_page", "medium": "html", "text": html_to_text(p), "images": []} for p in html_files]
+        fps += [page_fp.from_saved_page(p) for p in html_files]
+    for t in text_files:
+        body = open(t, encoding="utf-8", errors="ignore").read().strip()
+        if body:
+            parts.append({"role": "bridge_page", "medium": "text", "text": body[:40000], "images": []})
+    if hars and not html_files and not text_files and not url.strip():  # a log alone: read its pages
+        for h in hars:
+            try:
+                parts += [{"role": "bridge_page", "medium": "text", "text": t, "images": []}
+                          for t in page_fp.har_page_texts(h)[:3]]
+            except (ValueError, KeyError, OSError):
+                pass
     if page_text.strip():
         parts.append({"role": text_role, "medium": "text", "text": page_text.strip(), "images": []})
     if not parts:
+        if hars:
+            notes.append("the network logs hold no readable page: add the article text, a screenshot or the saved page")
         return None, notes
+    merged = page_fp.merge(*fps)
+    if merged["structure"] or merged["images"]:
+        tech["page_fingerprints"] = merged
     return {"schema_version": "1.0", "case_id": "new", "parts": parts, "technical_summary": tech,
             "resolved_identities": []}, notes
 

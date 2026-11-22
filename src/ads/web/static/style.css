@@ -82,6 +82,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .link-btn:hover:not(:disabled) { background: none; color: var(--info); }
 :is(button, input, textarea, summary, a, [tabindex]):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .paste summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.drop { border: 1px dashed var(--rule-strong); background: var(--fill); padding: 14px 16px; display: grid; gap: 4px;
+  cursor: pointer; font-size: 14px; }
+.drop:hover, .drop.over { background: var(--hit); border-style: solid; }
+.drop .link-like { text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.file-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; font-size: 13px; }
+.file-list:empty { display: none; }
+.file-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: baseline;
+  padding: 5px 10px; border: 1px solid var(--rule); border-top: none; background: var(--paper); }
+.file-list li:first-child { border-top: 1px solid var(--rule); }
+.file-list .fname { overflow-wrap: anywhere; font-family: var(--mono); font-size: 12.5px; }
+.file-list .fkind { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.file-list .fkind.bad { color: var(--ev); }
+.file-list .fsize { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.file-list button { padding: 2px 8px; font-size: 12px; }
 .message { margin: 0; font-size: 14px; }
 .message:empty { display: none; }
 .greek { text-transform: none; font-size: 13px; }

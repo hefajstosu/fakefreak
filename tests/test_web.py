@@ -102,3 +102,56 @@ def test_graph_lists_cases_campaigns_and_links(panel):
     assert camp["a"] == camp["b"] != camp["c"]
     ab = next(e for e in g["edges"] if (e["a"], e["b"]) == ("a", "b"))
     assert ab["same_campaign"] and not ab["must_link"]
+
+
+def multipart(fields, files):
+    boundary = "----testboundary7MA4YWxkTrZu0gW"
+    out = b""
+    for k, v in fields.items():
+        out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").encode()
+    for name, data in files:
+        out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"{name}\"\r\n"
+                "Content-Type: application/octet-stream\r\n\r\n").encode() + data + b"\r\n"
+    return out + f"--{boundary}--\r\n".encode(), f"multipart/form-data; boundary={boundary}"
+
+
+def test_analyse_uploaded_files_then_save(panel, monkeypatch, tmp_path):
+    import io
+    from PIL import Image
+    from ads.preprocess import domain_meta
+    base, cases = panel
+    monkeypatch.setattr(srv, "UPLOADS", str(tmp_path / "uploads"))
+    monkeypatch.setattr(domain_meta, "case_metadata", lambda *a, **k: [])   # no network in tests
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 200), "red").save(buf, format="PNG")
+    page = b"<html><body><h1>Inwestuj w AlphaPlat</h1><p>" + b"Zarabiaj codziennie. " * 30 + b"</p></body></html>"
+    body, ctype = multipart({"tau": "0.6", "url": "", "text": ""},
+                            [("../../ad shot.png", buf.getvalue()), ("article.html", page), ("notes.exe", b"MZ")])
+    req = urllib.request.Request(base + "/api/analyze", data=body, headers={"Content-Type": ctype})
+    with urllib.request.urlopen(req) as r:
+        res = json.loads(r.read())
+    assert res["profile"]["product"] == "AlphaPlat" and any("notes.exe" in n for n in res["notes"])
+    stored = os.listdir(tmp_path / "uploads" / res["id"])
+    assert "ad_shot.png" in stored and "article.html" in stored and not any("/" in n for n in stored)
+    assert call(base + "/api/save", {"id": res["id"]})[0] == 200
+    assert not (tmp_path / "uploads" / res["id"]).exists()                  # cleaned up once saved
+    assert any(f.endswith(".png") for f in os.listdir(cases / "web_1"))     # the screenshot went with the case
+
+
+def test_upload_with_nothing_usable_is_a_clear_400(panel, monkeypatch, tmp_path):
+    base, _ = panel
+    monkeypatch.setattr(srv, "UPLOADS", str(tmp_path / "uploads"))
+    body, ctype = multipart({"tau": "0.6"}, [("virus.exe", b"MZ")])
+    req = urllib.request.Request(base + "/api/analyze", data=body, headers={"Content-Type": ctype})
+    with pytest.raises(urllib.error.HTTPError) as e:
+        urllib.request.urlopen(req)
+    assert e.value.code == 400 and b"Nothing to analyse" in e.value.read()
+    assert not os.listdir(tmp_path / "uploads")                              # failed analysis leaves no files
+
+
+def test_safe_names_stay_inside_and_do_not_collide():
+    used = set()
+    assert srv.safe_name("../../etc/passwd", used) == "passwd"
+    assert srv.safe_name("C:\\x\\shot one.png", used) == "shot_one.png"
+    assert srv.safe_name("shot one.png", used) == "shot_one_2.png"
+    assert srv.safe_name(".hidden", used) == "hidden"

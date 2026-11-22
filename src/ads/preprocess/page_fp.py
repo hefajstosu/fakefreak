@@ -174,3 +174,20 @@ def from_manifest(manifest: Dict, data_dir: str) -> Dict[str, list]:
            if part.get("html") and os.path.exists(os.path.join(data_dir, part["html"]))]
     fps += [from_har(os.path.join(data_dir, h)) for h in manifest.get("hars", []) if os.path.exists(os.path.join(data_dir, h))]
     return merge(*fps)
+
+
+def har_page_texts(path: str, min_chars: int = 200) -> List[str]:
+    """Readable text of the HTML documents recorded in a HAR log (for a case given only as a log)."""
+    from .assemble import html_str_to_text
+    out = []
+    for e in json.load(open(path, encoding="utf-8"))["log"]["entries"]:
+        content = e.get("response", {}).get("content", {}) or {}
+        if "html" not in (content.get("mimeType") or "").lower() or not content.get("text"):
+            continue
+        body = content["text"]
+        if content.get("encoding") == "base64":
+            body = base64.b64decode(body).decode("utf-8", "ignore")
+        t = html_str_to_text(body)
+        if len(t) >= min_chars and t not in out:
+            out.append(t)
+    return out

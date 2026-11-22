@@ -56,7 +56,17 @@
             <label class="sr-only" for="text">Tekst artykułu</label>
             <textarea id="text" name="text" rows="7" placeholder="Treść artykułu"></textarea>
           </details>
-          <p class="hint">Program pobiera stronę, wyciąga profil przez LLM i porównuje go ze sprawami w bazie. Zwykle 5–15 s.</p>
+          <span class="field-label" id="files-label">Pliki artykułu (opcjonalnie, wiele naraz)</span>
+          <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="files-label files-hint">
+            <input id="files" type="file" multiple hidden
+                   accept=".png,.jpg,.jpeg,.webp,.gif,.html,.htm,.har,.txt,.mp4,.mov,.webm,.m4v">
+            <span><strong>Przeciągnij pliki tutaj</strong> albo <span class="link-like">wybierz z dysku</span></span>
+            <span class="hint" id="files-hint">Zrzuty reklamy (PNG, JPG, WebP), zapisane strony (HTML), logi sieci (HAR),
+              tekst (TXT), wideo (MP4, MOV, WebM). Zrzuty i klatki wideo idą do LLM jako kreacja reklamy (maks. 6),
+              HTML i tekst jako strony, HAR daje ślady techniczne i metadane domen.</span>
+          </div>
+          <ul class="file-list" id="file-list" aria-live="polite"></ul>
+          <p class="hint">Program pobiera stronę i czyta pliki, wyciąga profil przez LLM i porównuje go ze sprawami w bazie. Zwykle 5–30 s.</p>
           <p class="message" id="form-msg" role="status" aria-live="polite"></p>
         </form>
       </div>

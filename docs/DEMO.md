@@ -9,7 +9,8 @@
 4. Free-tier quota resets about 09:00 Warsaw time; the demo works without any LLM calls for everything except new material.
 
 ## Walkthrough (web panel, `docker compose up` or `cd src && python -m ads.web.server`)
-1. **Analizator.** Paste a URL (or the article text) and press *Analizuj*. Read the verdict and *Dlaczego taki werdykt*:
+1. **Analizator.** Paste a URL (or the article text), or drop the article's files (ad screenshots, saved HTML pages,
+   HAR logs, text, video; several at once), and press *Analizuj*. Read the verdict and *Dlaczego taki werdykt*:
    the rule that fired, the numbers it compared and whether one feature group decides it. *Dopasowanie do kampanii* says
    for every campaign whether the article joined it and why (hard evidence with which case, or mean score against tau).
 2. **Dlaczego?** next to a close case: the score split into feature groups, shared values, differences, missing data,

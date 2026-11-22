@@ -68,7 +68,8 @@ python -m ads.robustness channels                       # switch each feature gr
 python -m ads.robustness make-degraded --model gemini-3.5-flash-lite   # re-extract reduced inputs (LLM quota)
 python -m ads.robustness degrade                        # missing-data tests (ad only / pages only / no traces)
 cd .. && streamlit run src/ads/app.py                   # demonstrator
-cd src && python -m ads.web.server                      # web panel at http://127.0.0.1:8000: paste a URL, browse the campaigns
+cd src && python -m ads.web.server                      # web panel at http://127.0.0.1:8000: a URL, pasted text or
+                                                        # uploaded files (screenshots, HTML, HAR, TXT, video), campaigns
 python -m ads.explain 1 2                               # why two cases are linked (python -m ads.explain --campaigns)
 python -m ads.bench --sizes 100 300 1000                # how comparison time grows with the database
 python -m pytest tests                                  # unit tests (synthetic data, no network)

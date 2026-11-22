@@ -7,6 +7,8 @@ API
   GET  /api/groups?tau=0.6         {"tau", "groups": [{"no", "family", "scam_type", "members": [summary], "links": [...],
                                     "explanation": explain.campaign()}]}
   POST /api/analyze {url, text, tau}   {"id", "notes", "llm_used", "decision", "reasons", "campaigns", "profile",
+                                    (JSON, or multipart/form-data with the same fields plus any number of "files":
+                                     screenshots, saved HTML pages, HAR logs, text files, videos)
                                     "neighbours": [{..., "explanation": explain.pair()}], "joins", "thresholds"}
   POST /api/save {id}              {"case_id"}
   GET  /api/explain?a=&b=&tau=     explain.pair() of two database cases; a=new&id=<analysis id> for the analysed article
@@ -20,21 +22,28 @@ import argparse
 import json
 import mimetypes
 import os
+import re
+import shutil
 import sys
 import threading
 import uuid
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlsplit
 
 from .. import analyze as an
 from .. import decision, explain
 from ..evaluate import case_meta, load_profiles
+from ..paths import DATA
 from ..llm.client import QuotaExhausted, load_env, make_client
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_BODY = 200_000
 MAX_PENDING = 50    # unsaved analyses kept in memory (oldest dropped first)
+MAX_UPLOAD = int(os.environ.get("ADS_MAX_UPLOAD_MB", "200")) * 1_000_000  # one analysis with its files
+UPLOADS = os.path.join(DATA, "uploads")  # uploaded files of unsaved analyses (gitignored), one folder per analysis
 GRAPH_EDGES_PER_CASE = 4  # weaker links than these per case are left out of the graph (hard evidence always stays)
 
 
@@ -133,17 +142,81 @@ def explain_payload(state: State, query: Dict[str, list]) -> Dict[str, Any]:
     return {"a": a, "b": b, **explain.pair(pa, state.profiles[b], tau)}
 
 
-def analyze_payload(state: State, body: dict) -> Dict[str, Any]:
+def parse_multipart(content_type: str, body: bytes) -> Tuple[Dict[str, str], List[Tuple[str, bytes]]]:
+    """Form fields and uploaded files of a multipart/form-data body (standard library email parser)."""
+    msg = BytesParser(policy=email_policy).parsebytes(b"Content-Type: " + content_type.encode("latin-1") + b"\r\n\r\n"
+                                                      + body)
+    if not msg.is_multipart():
+        raise ValueError("expected multipart/form-data")
+    fields: Dict[str, str] = {}
+    files: List[Tuple[str, bytes]] = []
+    for part in msg.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        data = part.get_payload(decode=True) or b""
+        if part.get_filename():
+            files.append((part.get_filename(), data))
+        elif name:
+            fields[name] = data.decode("utf-8", "replace")
+    return fields, files
+
+
+def safe_name(name: str, used: set) -> str:
+    """A file name that cannot leave the upload folder and does not collide with another upload."""
+    base = re.sub(r"[^\w.\-]+", "_", os.path.basename(name.replace("\\", "/")))[-120:].lstrip(".") or "file"
+    stem, ext = os.path.splitext(base)
+    out, n = base, 1
+    while out in used:
+        n += 1
+        out = f"{stem}_{n}{ext}"
+    used.add(out)
+    return out
+
+
+def store_uploads(aid: str, files: List[Tuple[str, bytes]]) -> Tuple[Dict[str, List[str]], List[str]]:
+    """Write the uploaded files to UPLOADS/<analysis id>/ and sort them by kind; unsupported ones are reported."""
+    if not files:
+        return {}, []
+    d = os.path.join(UPLOADS, aid)
+    os.makedirs(d, exist_ok=True)
+    used: set = set()
+    paths = []
+    for name, data in files:
+        p = os.path.join(d, safe_name(name, used))
+        with open(p, "wb") as f:
+            f.write(data)
+        paths.append(p)
+    kinds = an.classify_files(paths)
+    notes = [f"skipped unsupported file {os.path.basename(p)}" for p in kinds.pop("unsupported", [])]
+    return kinds, notes
+
+
+def drop_uploads(aid: str) -> None:
+    shutil.rmtree(os.path.join(UPLOADS, aid), ignore_errors=True)
+
+
+def analyze_payload(state: State, body: dict, files: Optional[List[Tuple[str, bytes]]] = None) -> Dict[str, Any]:
     tau = parse_tau(body.get("tau", 0.6))
-    case, notes = an.build_case(url=str(body.get("url") or ""), text=str(body.get("text") or ""))
-    if case is None:
-        raise ValueError("No article text: " + ("; ".join(notes) or "give a URL or paste the text") + ".")
-    res = an.analyse(case, state.profiles, tau, state.llm())
     aid = uuid.uuid4().hex
+    kinds, upload_notes = store_uploads(aid, files or [])
+    try:
+        case, notes = an.build_case(url=str(body.get("url") or ""), text=str(body.get("text") or ""),
+                                    images=kinds.get("image", []), html_files=kinds.get("html", []),
+                                    hars=kinds.get("har", []), videos=kinds.get("video", []),
+                                    text_files=kinds.get("text", []), work_dir=os.path.join(UPLOADS, aid))
+        notes = upload_notes + notes
+        if case is None:
+            raise ValueError("Nothing to analyse: " + ("; ".join(notes) or "give a URL, paste the text or add files")
+                             + ".")
+        res = an.analyse(case, state.profiles, tau, state.llm())
+    except Exception:
+        drop_uploads(aid)
+        raise
     with state.lock:
         state.pending[aid] = (case, res)
         while len(state.pending) > MAX_PENDING:
-            del state.pending[next(iter(state.pending))]
+            old = next(iter(state.pending))
+            del state.pending[old]
+            drop_uploads(old)
     numbers = campaign_numbers(state, tau)
     return {"id": aid, "notes": notes, "llm_used": res["llm_used"],
             "decision": {k: res["decision"][k] for k in ("status", "title", "explanation")},
@@ -164,7 +237,8 @@ def save_payload(state: State, body: dict) -> Dict[str, Any]:
     if item is None:
         raise KeyError("This analysis is unknown or already saved; run it again.")
     case, res = item
-    cid = an.save_case(case, res["profile"], res["decision"])
+    cid = an.save_case(case, res["profile"], res["decision"])  # copies the screenshots into the case folder
+    drop_uploads(str(body.get("id")))
     with state.lock:
         state.reload()
     return {"case_id": cid}
@@ -221,10 +295,19 @@ def make_handler(state: State):
         def do_POST(self):
             try:
                 n = int(self.headers.get("Content-Length") or 0)
-                if n > MAX_BODY:
-                    raise ValueError("request too large")
-                body = json.loads(self.rfile.read(n) or b"{}")
+                ctype = self.headers.get("Content-Type") or ""
+                multipart = ctype.startswith("multipart/form-data")
+                if n > (MAX_UPLOAD if multipart else MAX_BODY):
+                    raise ValueError(f"request too large (limit {MAX_UPLOAD // 1_000_000} MB)" if multipart
+                                     else "request too large")
+                raw = self.rfile.read(n)
                 path = urlsplit(self.path).path
+                if multipart:
+                    if path != "/api/analyze":
+                        raise ValueError("files can only be sent to /api/analyze")
+                    fields, files = parse_multipart(ctype, raw)
+                    return self.send_json(200, analyze_payload(state, fields, files))
+                body = json.loads(raw or b"{}")
                 if path == "/api/analyze":
                     return self.send_json(200, analyze_payload(state, body))
                 if path == "/api/save":

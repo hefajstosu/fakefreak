@@ -126,3 +126,31 @@ def test_compare_explains_the_decision_and_every_campaign():
     assert not rows[("c",)]["joined"] and rows[("c",)]["gap"] > 0
     g = {tuple(x["members"]): x["explanation"] for x in an.groups_overview(DB, 0.6)}
     assert g[("a", "b")]["rule"] == "same content" and g[("c",)]["nearest"]["members"] == ["a", "b"]
+
+
+def test_build_case_from_html_har_and_text_files_without_touching_the_template(tmp_path, monkeypatch):
+    from ads.preprocess import domain_meta
+    monkeypatch.setattr(domain_meta, "case_metadata", lambda *a, **k: ["registered:2026-01-01"])
+    page = tmp_path / "a.html"
+    page.write_text("<html><body><main><h1>Platforma</h1><p>" + "Zysk bez ryzyka. " * 30 + "</p></main></body></html>",
+                    encoding="utf-8")
+    note = tmp_path / "n.txt"
+    note.write_text("Tekst artykułu z pliku.", encoding="utf-8")
+    har = {"log": {"entries": [
+        {"startedDateTime": "2026-01-02T10:00:00Z", "request": {"method": "GET", "url": "https://land.test/p?utm_xyz=1"},
+         "response": {"status": 200, "headers": [], "content": {"mimeType": "text/html",
+                                                                "text": "<html><body><p>" + "Kup teraz. " * 40 + "</p></body></html>"}}},
+        {"startedDateTime": "2026-01-02T10:00:01Z", "request": {"method": "GET",
+                                                                 "url": "https://connect.facebook.net/tr?id=123456789012345"},
+         "response": {"status": 200, "headers": [], "content": {"mimeType": "image/gif"}}}]}}
+    hf = tmp_path / "log.har"
+    hf.write_text(json.dumps(har), encoding="utf-8")
+    case, notes = an.build_case(html_files=[str(page)], hars=[str(hf)], text_files=[str(note)])
+    roles = [p["role"] for p in case["parts"]]
+    assert roles == ["bridge_page", "bridge_page"] and "Tekst artykułu" in case["parts"][1]["text"]
+    t = case["technical_summary"]
+    assert t["urls_and_domains"] and t["domain_and_cert_metadata"] == ["registered:2026-01-01"]
+    assert t["page_fingerprints"]["structure"] and an.EMPTY_TECH["urls_and_domains"] == []
+    alone, _ = an.build_case(hars=[str(hf)])                      # a log alone: its page text is read
+    assert alone["parts"][0]["text"].startswith("Kup teraz")
+    assert an.classify_files(["a.PNG", "b.har", "c.exe"]) == {"image": ["a.PNG"], "har": ["b.har"], "unsupported": ["c.exe"]}
