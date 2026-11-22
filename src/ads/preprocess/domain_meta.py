@@ -24,7 +24,6 @@ Mass infrastructure (big CDNs and clouds, registrar parking name servers) is mar
 as evidence: most scam pages sit behind the same CDN.
 """
 import hashlib
-import ipaddress
 import json
 import os
 import time
@@ -34,7 +33,8 @@ from typing import Dict, Iterable, List, Optional
 import requests
 
 from ..paths import CACHE
-from ..urls import host, reg_domain
+from ..urls import host, is_public_ip, reg_domain
+from . import har
 
 CACHE_DIR = os.path.join(CACHE, "domain_meta")
 CACHE_DAYS = 7
@@ -61,27 +61,26 @@ def get_json(url: str, params: Optional[dict] = None, timeout: int = TIMEOUT, tr
     if os.path.exists(f) and time.time() - os.path.getmtime(f) < CACHE_DAYS * 86400:
         data = json.load(open(f, encoding="utf-8"))
         return None if isinstance(data, dict) and "_none" in data else data
-    result, why = None, "failed"
+    result, final = None, None  # final: the source answered "no" (4xx except 429); only answers are cached
     for attempt in range(tries):
         try:
             r = requests.get(url, params=params, headers=HEADERS, timeout=timeout)
-            if r.status_code == 404:
-                why = "not found"
-                break
             if r.status_code in (429, 500, 502, 503, 504):
-                why = f"http {r.status_code}"
                 time.sleep(2 * (attempt + 1))
                 continue
+            if 400 <= r.status_code < 500:
+                final = f"http {r.status_code}"
+                break
             r.raise_for_status()
             result = r.json()
             break
-        except (requests.RequestException, ValueError) as e:
-            why = type(e).__name__
+        except (requests.RequestException, ValueError):  # network trouble or an error page instead of JSON
             time.sleep(1)
-    if result is None and why.startswith(("http 5", "http 429", "Connect", "Timeout", "ReadTimeout")):
+    if result is None and final is None:
         return None  # transient: do not cache, try again next time
     os.makedirs(CACHE_DIR, exist_ok=True)
-    json.dump(result if result is not None else {"_none": why}, open(f, "w", encoding="utf-8"))
+    with open(f, "w", encoding="utf-8") as out:
+        json.dump(result if result is not None else {"_none": final}, out)
     return result
 
 
@@ -119,14 +118,6 @@ def dns_a(d: str) -> Optional[List[str]]:
     if j.get("Status") == 3:
         return []
     return [a["data"] for a in j.get("Answer", []) or [] if a.get("type") == 1]
-
-
-def is_public_ip(ip: str) -> bool:
-    try:
-        a = ipaddress.ip_address(ip)
-    except ValueError:
-        return False
-    return not (a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast or a.is_unspecified)
 
 
 def rdap_ip(ip: str) -> List[str]:
@@ -196,6 +187,7 @@ def cert_pl_listed(d: str) -> List[str]:
                 open(f, "w", encoding="utf-8").write(r.text)
             except requests.RequestException:
                 if not os.path.exists(f):
+                    _warning_list = set()  # unavailable for this run; do not retry the download per domain
                     return []
         _warning_list = {ln.strip().lower() for ln in open(f, encoding="utf-8") if ln.strip()}
     listed = d in _warning_list or any(x.endswith("." + d) for x in _warning_list if x.endswith(d))
@@ -238,7 +230,7 @@ def capture_date(manifest: Optional[dict], data_dir: Optional[str]) -> Optional[
     """When the case was recorded: the first request of its first HAR log."""
     for h in (manifest or {}).get("hars", []):
         try:
-            entries = json.load(open(os.path.join(data_dir, h), encoding="utf-8"))["log"]["entries"]
+            entries = har.entries(os.path.join(data_dir, h))
             first = min(e.get("startedDateTime", "") for e in entries if e.get("startedDateTime"))
             return datetime.fromisoformat(first.replace("Z", "+00:00")).date()
         except (OSError, ValueError, KeyError):
@@ -264,12 +256,13 @@ def today() -> date:
 # ---------------------------------------------------------------- what may count as evidence
 
 def is_mass_fact(fact: str) -> bool:
+    """A hosting network or name-server provider shared by everyone (CDNs, big registrars): never a link."""
     kind, _, value = fact.partition(":")
     if kind == "net":
         return any(m in value.upper() for m in MASS_NETWORKS)
     if kind == "ns":
         return any(m in value.lower() for m in MASS_NS)
-    return kind not in ("cert_san", "regbatch")  # registrar, country, dates, issuer, status: descriptive only
+    return False
 
 
 def linking_facts(facts: Iterable[str]) -> List[str]:

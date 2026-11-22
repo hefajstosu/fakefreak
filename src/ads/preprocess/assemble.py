@@ -22,39 +22,18 @@ schemas/case_input.schema.json. Manifests contain file names of the organiser's 
 they live in the gitignored data/cases/ directory.
 """
 import argparse
-import html as htmllib
 import json
 import os
-import re
 import sys
 from typing import Any, Dict, List
 
-from jsonschema import Draft7Validator
-
-from ..paths import CASES, DATA, SCHEMAS
+from .. import schema
+from ..database import case_ids
+from ..paths import CASES, DATA
 from . import har as harmod
 from . import page_fp
+from .html_text import MAX_TEXT, html_to_text
 from . import video as videomod
-
-MAX_TEXT = 40000
-# Long phone-country picklists in sign-up widgets ("Afghanistan +93 Albania +355 ...") are noise.
-PICKLIST = re.compile(r"(?:[A-ZÅÇ][^\s+]*(?: [^\s+]+){0,3} \+\d{1,4}\s+){8,}")
-
-
-def html_to_text(path: str) -> str:
-    return html_str_to_text(open(path, encoding="utf-8", errors="ignore").read())
-
-
-def html_str_to_text(s: str) -> str:
-    s = re.sub(r"(?is)<!--.*?-->", "", s)
-    s = re.sub(r"(?is)<(script|style|noscript|svg|head|template)[^>]*>.*?</\1>", "", s)
-    s = re.sub(r"(?i)</(p|div|li|h\d|tr|section|article)>|<br\s*/?>", "\n", s)
-    t = htmllib.unescape(re.sub(r"<[^>]+>", " ", s))
-    lines = [re.sub(r"[ \t\xa0]+", " ", ln).strip() for ln in t.split("\n")]
-    text = "\n".join(ln for ln in lines if ln)
-    text = PICKLIST.sub(" ", text)
-    return text[:MAX_TEXT].strip()
-
 
 def rel(path: str) -> str:
     return os.path.relpath(path, DATA).replace(os.sep, "/")
@@ -76,7 +55,7 @@ def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool, 
         vpath = os.path.join(DATA, spec["video"])
         part["source_files"].append(spec["video"])
         roi = tuple(spec["roi"]) if spec.get("roi") else None
-        samples, _dur = videomod.sample_frames(vpath, 48, spec.get("crop_top", 0.0), spec.get("crop_bottom", 0.0), roi)
+        samples, _dur = videomod.sample_frames(vpath, videomod.SAMPLES, spec.get("crop_top", 0.0), spec.get("crop_bottom", 0.0), roi)
         sheet = os.path.join(case_dir, f"contact_sheet_{idx}.jpg")
         videomod.make_contact_sheet(videomod.pick_keyframes(samples), sheet)
         images.append(rel(sheet))
@@ -100,8 +79,7 @@ def assemble(case_id: str, domain_meta: bool = False) -> Dict[str, Any]:
     case_dir = os.path.join(CASES, case_id)
     m = json.load(open(os.path.join(case_dir, "manifest.json"), encoding="utf-8"))
     parts = [build_part(case_dir, i, s, m.get("transcribe", False), m.get("transcribe_model")) for i, s in enumerate(m["parts"])]
-    tech = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [],
-            "dom_and_form_clues": [], "domain_and_cert_metadata": []}
+    tech = schema.empty_tech()
     for h in m.get("hars", []):
         harmod.process(os.path.join(DATA, h), tech)
     tech["page_fingerprints"] = page_fp.from_manifest(m, DATA)  # page structure and image kit (code-owned)
@@ -110,10 +88,7 @@ def assemble(case_id: str, domain_meta: bool = False) -> Dict[str, Any]:
         tech["domain_and_cert_metadata"] = dm.case_metadata(tech, m, DATA)
     case = {"schema_version": "1.0", "case_id": m["case_id"], "parts": parts,
             "technical_summary": tech, "resolved_identities": m.get("identities", [])}
-    schema = json.load(open(os.path.join(SCHEMAS, "case_input.schema.json"), encoding="utf-8"))
-    errs = [f"{'/'.join(map(str, e.absolute_path))}: {e.message[:150]}" for e in Draft7Validator(schema).iter_errors(case)]
-    if errs:
-        raise ValueError(f"case {case_id} invalid: " + "; ".join(errs[:5]))
+    schema.check(case, "case_input.schema.json", f"case {case_id}")
     json.dump(case, open(os.path.join(case_dir, "case_input.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
     return case
@@ -125,8 +100,7 @@ def main() -> None:
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--domain-meta", action="store_true", help="query public domain/infrastructure metadata (network)")
     a = ap.parse_args()
-    ids = sorted(d for d in os.listdir(CASES) if os.path.exists(os.path.join(CASES, d, "manifest.json"))) \
-        if a.all else a.cases
+    ids = case_ids("manifest.json") if a.all else a.cases
     for cid in ids:
         c = assemble(cid, a.domain_meta)
         roles = [p["role"] for p in c["parts"]]

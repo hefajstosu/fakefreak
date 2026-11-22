@@ -1,5 +1,4 @@
-# Track B. Initial values.
-provider: gemini               # gemini | mock (tests); another provider = one LLMClient subclass
+provider: gemini               # another provider = one LLMClient subclass (src/ads/llm/client.py)
 api_key_env: GEMINI_API_KEY    # key from Google AI Studio, put it in .env
 # Flash-Lite: about 10x cheaper per analysis than gemini-3.5-flash (no thinking tokens). Profiles made with
 # different models differ a little, so re-extract the database after switching if scores must be comparable.
@@ -8,12 +7,8 @@ generation_model: gemini-3.1-flash-lite
 # Tried in order when the chosen model is out of quota or unavailable (cheapest first).
 fallback_models: [gemini-3.5-flash-lite, gemini-3-flash-preview]
 cache_dir: .cache/llm
-max_retries: 2
-prompts:
-  extraction: prompts/extraction.txt
-  alternatives: prompts/alternatives.txt
+max_retries: 2                 # transient server errors and timeouts only; quota moves to the next model
 variants:
   N: 4                         # variants per case
   k: 2                         # mutated slots per variant
   allowed_slots: null          # null = all slots in the prompt
-  retry_rejected: 1

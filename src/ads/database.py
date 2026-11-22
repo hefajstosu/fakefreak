@@ -1,5 +1,6 @@
 """The case database: one folder per case in data/cases (gitignored).
 
+    ids = case_ids("manifest.json")            # sorted ids of the cases that have this file
     profiles = load_profiles()                 # {case id: profile}; duplicates of another case are left out
     meta = case_meta(cid)                      # meta.json of a case saved from the panel
     path = first_image(cid)                    # its first screenshot or video contact sheet
@@ -10,12 +11,17 @@ import json
 import os
 import shutil
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .paths import CASES, DATA
 
 NO_CASES = ("No case profiles found in {}/*/profile.json. Put the per-case files there (README, 'Sample data') "
             "or analyse and save new material in the web panel first.")
+
+
+def case_ids(required: str = "profile.json", cases_dir: Optional[str] = None) -> List[str]:
+    cases_dir = cases_dir or CASES
+    return sorted(c for c in os.listdir(cases_dir) if os.path.exists(os.path.join(cases_dir, c, required)))
 
 
 def case_meta(cid: str, cases_dir: Optional[str] = None) -> dict:

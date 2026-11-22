@@ -1,4 +1,5 @@
 """URL helpers shared by the log parser, the live scan, the domain metadata and the similarity."""
+import ipaddress
 import re
 from typing import Iterable, List
 from urllib.parse import parse_qsl, urlparse, urlsplit
@@ -29,6 +30,15 @@ def reg_domain(h: str) -> str:
 
 def is_mass(h: str) -> bool:
     return bool(GOOGLE_RX.search(h)) or any(h == d or h.endswith("." + d) for d in MASS_INFRA)
+
+
+def is_public_ip(ip: str) -> bool:
+    """A globally routable address (not private, loopback, link-local, reserved, multicast or unspecified)."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return not (a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast or a.is_unspecified)
 
 
 def sanitize_url(url: str) -> str:

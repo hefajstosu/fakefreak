@@ -5,10 +5,10 @@
     result = compare(profile, fingerprint, profiles, tau)   # no LLM: duplicates, neighbours, joins, verdict, reasons
     groups = groups_overview(profiles, tau)         # campaigns with family, members, links and explanation
 """
-from .case import EMPTY_TECH, FILE_KINDS, MAX_CREATIVES, build_case, classify_files
+from .case import FILE_KINDS, MAX_CREATIVES, build_case, classify_files
 from .compare import analyse, compare
 from .index import campaigns, families, pair_table, reset
 from .views import case_summary, groups_overview
 
-__all__ = ["EMPTY_TECH", "FILE_KINDS", "MAX_CREATIVES", "build_case", "classify_files", "analyse", "compare",
+__all__ = ["FILE_KINDS", "MAX_CREATIVES", "build_case", "classify_files", "analyse", "compare",
            "campaigns", "families", "pair_table", "reset", "case_summary", "groups_overview"]

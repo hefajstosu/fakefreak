@@ -34,18 +34,15 @@ def test_one_template_with_other_words_scores_high_and_another_layout_low():
     assert pf.sketch_similarity(a, b) >= 0.9 and pf.sketch_similarity(a, c) <= 0.3
 
 
-def test_sketch_is_stable_across_processes():
+def test_sketch_is_stable_across_processes(tmp_path):
+    tpl = tmp_path / "tpl.html"
+    tpl.write_text(TEMPLATE.format(n=1, w1="a", w2="b"), encoding="utf-8")
     code = ("import sys; sys.path.insert(0, 'src'); from ads.preprocess import page_fp as pf; "
-            "print(pf.structure_sketch(open('tests/_tpl.html').read())[:5])")
-    tpl = os.path.join(os.path.dirname(__file__), "_tpl.html")
-    open(tpl, "w", encoding="utf-8").write(TEMPLATE.format(n=1, w1="a", w2="b"))
-    try:
-        root = os.path.join(os.path.dirname(__file__), "..")
-        outs = {subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True).stdout
-                for _ in range(2)}
-        assert len(outs) == 1 and outs.pop().startswith("[")
-    finally:
-        os.remove(tpl)
+            f"print(pf.structure_sketch(open({str(tpl)!r}, encoding='utf-8').read())[:5])")
+    root = os.path.join(os.path.dirname(__file__), "..")
+    outs = {subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True).stdout
+            for _ in range(2)}
+    assert len(outs) == 1 and outs.pop().startswith("[")
 
 
 def test_image_hashes_keep_large_rasters_only():

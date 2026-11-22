@@ -3,14 +3,13 @@ import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..preprocess import page_fp
+from ..preprocess.html_text import MAX_TEXT, html_to_text
+from ..schema import empty_tech
 
-EMPTY_TECH = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [], "dom_and_form_clues": [],
-              "domain_and_cert_metadata": []}
 FILE_KINDS = {".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
               ".html": "html", ".htm": "html", ".har": "har", ".txt": "text",
               ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video"}
 MAX_CREATIVES = 6   # screenshots sent to the LLM as the ad creative; more cost tokens without new information
-MAX_TEXT = 40_000   # characters per text file
 
 
 def classify_files(paths: Sequence[str]) -> Dict[str, List[str]]:
@@ -66,7 +65,7 @@ def _contact_sheets(videos: Sequence[str], work_dir: Optional[str], notes: List[
     sheets = []
     for v in videos:
         try:
-            samples, _ = video.sample_frames(v, 48, 0.0, 0.0, None)
+            samples, _ = video.sample_frames(v, video.SAMPLES, 0.0, 0.0, None)
             sheet = os.path.join(work_dir or os.path.dirname(v), os.path.splitext(os.path.basename(v))[0] + "_sheet.jpg")
             video.make_contact_sheet(video.pick_keyframes(samples), sheet)
             sheets.append(sheet)
@@ -86,7 +85,7 @@ def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_f
     gives the text of its pages. HAR logs and the scan give the technical traces and, with the pages, the page
     fingerprints; with `domain_meta` the domains found get public registry facts."""
     notes: List[str] = []
-    tech: Dict[str, Any] = {k: list(v) for k, v in EMPTY_TECH.items()}
+    tech: Dict[str, Any] = empty_tech()
     fps: list = []
     page_text = text.strip()
     if url.strip():
@@ -105,7 +104,6 @@ def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_f
     if creatives:
         parts.append({"role": "ad_creative", "medium": "image", "text": None, "images": creatives})
     if html_files:
-        from ..preprocess.assemble import html_to_text
         parts += [_page(html_to_text(p), "html") for p in html_files]
         fps += [page_fp.from_saved_page(p) for p in html_files]
     for t in text_files:

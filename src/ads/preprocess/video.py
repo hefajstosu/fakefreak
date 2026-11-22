@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+SAMPLES = 48  # frames read from a video; four keyframes are chosen among them
+
 
 def crop_frame(frame, crop_top, crop_bottom, roi):
     h, w = frame.shape[:2]
@@ -66,6 +68,8 @@ def pick_keyframes(samples, n=4, min_contrast=12.0, min_hash_dist=5):
     bounds = np.linspace(0, len(samples), n + 1).astype(int)
     for q in range(n):
         seg = samples[bounds[q]:bounds[q + 1]]
+        if not seg:  # fewer readable frames than quarters
+            continue
         ranked = sorted((s for s in seg if s["contrast"] >= min_contrast),
                         key=lambda s: s["sharpness"], reverse=True) or \
             sorted(seg, key=lambda s: s["contrast"], reverse=True)
@@ -74,7 +78,7 @@ def pick_keyframes(samples, n=4, min_contrast=12.0, min_hash_dist=5):
             if all(int((s["hash"] != c["hash"]).sum()) >= min_hash_dist for c in chosen):
                 pick = s
                 break
-        chosen.append(pick or (ranked[0] if ranked else seg[0]))
+        chosen.append(pick or ranked[0])
     return chosen
 
 
@@ -100,7 +104,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Contact sheet of a video's keyframes")
     ap.add_argument("video")
     ap.add_argument("out")
-    ap.add_argument("--samples", type=int, default=48)
+    ap.add_argument("--samples", type=int, default=SAMPLES)
     ap.add_argument("--crop-top", type=float, default=0.0)
     ap.add_argument("--crop-bottom", type=float, default=0.0)
     ap.add_argument("--roi", default=None, help="x,y,w,h as fractions of the frame")

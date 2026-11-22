@@ -9,8 +9,10 @@ What it does
   * follows HTTP redirects, `<meta refresh>` and (for near-empty pages) simple absolute JS redirects, recording the chain;
   * sends a mobile user agent, Polish locale and a social-media referer, because scam pages often show reviewers
     a neutral page (cloaking) and the real one only to such visitors;
-  * extracts tracker IDs (Meta Pixel, GTM, GA, Google Ads, TikTok), form endpoints with field names, and distinctive
-    first-party script/style file names, in the same string formats as `har.py`.
+  * extracts tracker IDs (Meta Pixel, GTM, GA, Google Ads, TikTok), form endpoints with field names, distinctive
+    first-party script/style file names and platform endpoint paths (`api:/api/v1/...`, also from up to 3 first-party
+    scripts), in the same string formats as `har.py`;
+  * fingerprints the page (structure sketch and the hashes of up to 10 first-party images, page_fp.py).
 What it does NOT do: execute JavaScript, solve captchas, or log in. JS-rendered pages give little text (a note says so).
 
 Safety: only http/https; every hop is resolved and refused if it points to a private, loopback, link-local or reserved
@@ -18,7 +20,6 @@ address (so the demo cannot be used to probe the local network); 15 s timeout; r
 Never scan a suspected scam domain from a machine you care about without a clean network context: the page is only
 downloaded and parsed as text, never rendered or executed.
 """
-import ipaddress
 import re
 import socket
 from typing import Any, Dict, List, Optional
@@ -26,9 +27,9 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
+from ..urls import host, is_mass, is_public_ip, reg_domain, sanitize_url
 from . import page_fp
-from ..urls import is_mass, reg_domain, sanitize_url
-from .assemble import html_str_to_text
+from .html_text import html_str_to_text
 
 UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/124.0 Mobile Safari/537.36")
@@ -57,8 +58,6 @@ ACTION = re.compile(r"""\baction=["']?([^"'\s>]*)""", re.I)
 FIELD = re.compile(r"""<(?:input|select|textarea)\b[^>]*?\bname=["']([^"']+)["']""", re.I)
 ASSET = re.compile(r"""<(?:script[^>]+src|link[^>]+href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']""", re.I)
 TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
-
-
 API_PATH = re.compile(r"""["'`](/api/[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){0,4}/?)""")
 MAX_SCRIPTS = 3
 MAX_SCRIPT_BYTES = 1_500_000
@@ -75,15 +74,24 @@ def extract_api_paths(text: str) -> List[str]:
     return sorted(out)
 
 
-def first_party_script_urls(html: str, base_url: str) -> List[str]:
-    base = reg_domain(urlsplit(base_url).hostname or "")
+def _first_party(srcs: List[str], base_url: str) -> List[str]:
+    """Absolute URLs of `srcs` on the page's own registered domain (never mass infrastructure), deduplicated."""
+    base = reg_domain(host(base_url))
     urls: List[str] = []
-    for src in ASSET.findall(html):
+    for src in srcs:
         u = urljoin(base_url, src)
-        h = urlsplit(u).hostname or ""
-        if urlsplit(u).path.endswith(".js") and reg_domain(h) == base and not is_mass(h) and u not in urls:
+        h = host(u)
+        if reg_domain(h) == base and not is_mass(h) and u not in urls:
             urls.append(u)
-    return urls[:MAX_SCRIPTS]
+    return urls
+
+
+def first_party_script_urls(html: str, base_url: str) -> List[str]:
+    return [u for u in _first_party(ASSET.findall(html), base_url) if urlsplit(u).path.endswith(".js")][:MAX_SCRIPTS]
+
+
+def first_party_image_urls(html: str, base_url: str) -> List[str]:
+    return [u for u in _first_party(IMG.findall(html), base_url) if not u.lower().endswith(".svg")][:MAX_IMAGES]
 
 
 def analyze(html: str, base_url: str, scripts: List[str]) -> Dict[str, List[str]]:
@@ -108,10 +116,8 @@ def _blocked(url: str, allow_private: bool) -> Optional[str]:
         addrs = {ai[4][0] for ai in socket.getaddrinfo(sp.hostname, sp.port or (443 if sp.scheme == "https" else 80))}
     except socket.gaierror:
         return f"cannot resolve {sp.hostname}"
-    for a in addrs:
-        ip = ipaddress.ip_address(a)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
-            return f"{sp.hostname} resolves to a non-public address; refusing to fetch"
+    if not all(is_public_ip(a) for a in addrs):
+        return f"{sp.hostname} resolves to a non-public address; refusing to fetch"
     return None
 
 
@@ -139,27 +145,12 @@ def extract_forms(html: str, base_url: str) -> List[str]:
 
 
 def extract_first_party_files(html: str, base_url: str) -> List[str]:
-    base = reg_domain(urlsplit(base_url).hostname or "")
     out: List[str] = []
-    for src in ASSET.findall(html):
-        u = urlsplit(urljoin(base_url, src))
-        if reg_domain(u.hostname or "") != base or is_mass(u.hostname or ""):
-            continue
-        name = u.path.rsplit("/", 1)[-1]
+    for u in _first_party(ASSET.findall(html), base_url):
+        name = urlsplit(u).path.rsplit("/", 1)[-1]
         if name and f"file:{name}" not in out:
             out.append(f"file:{name}")
     return out
-
-
-def first_party_image_urls(html: str, base_url: str) -> List[str]:
-    base = reg_domain(urlsplit(base_url).hostname or "")
-    urls: List[str] = []
-    for src in IMG.findall(html):
-        u = urljoin(base_url, src)
-        h = urlsplit(u).hostname or ""
-        if reg_domain(h) == base and not is_mass(h) and u not in urls and not u.lower().endswith(".svg"):
-            urls.append(u)
-    return urls[:MAX_IMAGES]
 
 
 def _read_bytes(resp: requests.Response, limit: int) -> bytes:
@@ -173,49 +164,74 @@ def _read_bytes(resp: requests.Response, limit: int) -> bytes:
 
 
 def _read(resp: requests.Response, limit: int = MAX_BYTES) -> str:
-    chunks, size = [], 0
-    for chunk in resp.iter_content(65536):
-        chunks.append(chunk)
-        size += len(chunk)
-        if size >= limit:
-            break
-    raw = b"".join(chunks)
-    return raw.decode(resp.encoding or resp.apparent_encoding or "utf-8", errors="replace")
+    return _read_bytes(resp, limit).decode(resp.encoding or resp.apparent_encoding or "utf-8", errors="replace")
+
+
+def _next_hop(html: str, cur: str) -> Optional[str]:
+    """Where a meta refresh or (on a near-empty page) a simple absolute JS redirect sends the visitor."""
+    m = META_REFRESH.search(html)
+    if m:
+        return urljoin(cur, m.group(1))
+    if len(html_str_to_text(html)) < 300:  # near-empty page: maybe a JS redirect stub
+        j = JS_REDIRECT.search(html)
+        if j:
+            return urljoin(cur, j.group(1))
+    return None
+
+
+def _follow(session: requests.Session, url: str, allow_private: bool, chain: List[str], notes: List[str]):
+    """Follow redirects from `url` (appending each hop to `chain`); returns (error, final URL, HTML, status)."""
+    cur, html, status = url, "", None
+    for _ in range(MAX_HOPS):
+        why = _blocked(cur, allow_private)
+        if why:
+            return why, cur, "", None
+        r = session.get(cur, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
+        chain.append(cur)
+        status = r.status_code
+        loc = r.headers.get("Location")
+        if 300 <= status < 400 and loc:
+            cur = urljoin(cur, loc)
+            continue
+        html = _read(r)
+        nxt = _next_hop(html, cur)
+        if nxt and nxt not in chain:
+            notes.append("followed a meta-refresh/JS redirect")
+            cur = nxt
+            continue
+        return None, cur, html, status
+    notes.append(f"stopped after {MAX_HOPS} hops")
+    return None, cur, html, status
+
+
+def _fetch_all(session: requests.Session, urls: List[str], allow_private: bool, read, notes=None) -> list:
+    """GET each first-party URL under the same safety rules as the page; `read(response)` gives the body kept."""
+    out = []
+    for u in urls:
+        if _blocked(u, allow_private):
+            continue
+        try:
+            r = session.get(u, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
+            if r.status_code == 200:
+                out.append(read(r))
+        except requests.RequestException:
+            if notes is not None:
+                notes.append(f"could not fetch script {u.rsplit('/', 1)[-1][:40]}")
+    return out
 
 
 def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
     notes: List[str] = []
     chain: List[str] = []
-    cur, html, status = url.strip(), "", None
     session = requests.Session()
     try:
-        for _ in range(MAX_HOPS):
-            why = _blocked(cur, allow_private)
-            if why:
-                return {"ok": False, "error": why, "chain": chain}
-            r = session.get(cur, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
-            chain.append(cur)
-            status = r.status_code
-            loc = r.headers.get("Location")
-            if 300 <= status < 400 and loc:
-                cur = urljoin(cur, loc)
-                continue
-            html = _read(r)
-            nxt = None
-            m = META_REFRESH.search(html)
-            if m:
-                nxt = urljoin(cur, m.group(1))
-            elif len(html_str_to_text(html)) < 300:  # near-empty page: maybe a JS redirect stub
-                j = JS_REDIRECT.search(html)
-                if j:
-                    nxt = urljoin(cur, j.group(1))
-            if nxt and nxt not in chain:
-                notes.append("followed a meta-refresh/JS redirect")
-                cur = nxt
-                continue
-            break
-        else:
-            notes.append(f"stopped after {MAX_HOPS} hops")
+        why, cur, html, status = _follow(session, url.strip(), allow_private, chain, notes)
+        if why:
+            return {"ok": False, "error": why, "chain": chain}
+        scripts = _fetch_all(session, first_party_script_urls(html, cur), allow_private,
+                             lambda r: _read(r, MAX_SCRIPT_BYTES), notes)
+        images = _fetch_all(session, first_party_image_urls(html, cur), allow_private,  # the page's own image kit
+                            lambda r: _read_bytes(r, MAX_BYTES))
     except requests.RequestException as e:
         return {"ok": False, "error": f"request failed: {str(e)[:160]}", "chain": chain}
 
@@ -225,28 +241,8 @@ def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
     if status and status >= 400:
         notes.append(f"HTTP status {status}")
     title = TITLE.search(html)
-    pub_chain = [sanitize_url(u) for u in chain if not is_mass(urlsplit(u).hostname or "")]
-    scripts: List[str] = []
-    for su in first_party_script_urls(html, cur):  # same safety rules as the page itself
-        if _blocked(su, allow_private):
-            continue
-        try:
-            rr = session.get(su, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
-            if rr.status_code == 200:
-                scripts.append(_read(rr, MAX_SCRIPT_BYTES))
-        except requests.RequestException:
-            notes.append(f"could not fetch script {su.rsplit('/', 1)[-1][:40]}")
+    pub_chain = [sanitize_url(u) for u in chain if not is_mass(host(u))]
     found = analyze(html, cur, scripts)
-    images: List[bytes] = []
-    for iu in first_party_image_urls(html, cur):  # the page's own image kit, same safety rules
-        if _blocked(iu, allow_private):
-            continue
-        try:
-            ri = session.get(iu, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
-            if ri.status_code == 200:
-                images.append(_read_bytes(ri, MAX_BYTES))
-        except requests.RequestException:
-            pass
     sketch = page_fp.structure_sketch(html)
     tech = {
         "urls_and_domains": [sanitize_url(cur)],

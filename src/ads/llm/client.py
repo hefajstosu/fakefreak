@@ -4,9 +4,10 @@ Usage:
     client = make_client()                       # reads config/llm.yaml and .env
     data = client.generate_json(system, parts)   # parts: [("text", "..."), ("image", "path.png")]
 
-Providers: "gemini" (google-genai), "mock" (tests). Adding another provider means one
-subclass of LLMClient with `_call`. Responses are cached on disk keyed by everything that
-influences them, so reruns and demo runs cost nothing.
+Provider: "gemini" (google-genai); tests use MockClient. Adding another provider means one subclass of
+LLMClient with `_call`. Responses are cached on disk keyed by everything that influences them, so reruns
+and demo runs cost nothing. A model out of quota is not retried: the client moves to the next one in
+fallback_models and raises QuotaExhausted when none is left.
 """
 import hashlib
 import io
@@ -73,7 +74,6 @@ class LLMClient:
     def __init__(self, model: str, cache_dir: str, max_retries: int = 2, temperature: float = 0.0, json_mode: bool = True):
         self.model, self.max_retries, self.temperature, self.json_mode = model, max_retries, temperature, json_mode
         self.cache_dir = cache_dir if os.path.isabs(cache_dir) else os.path.join(REPO, cache_dir)
-        os.makedirs(self.cache_dir, exist_ok=True)
 
     # -- to implement per provider -------------------------------------------------
     def _call(self, system: str, parts: List[Part]) -> str:
@@ -99,18 +99,18 @@ class LLMClient:
             try:
                 text = self._call(system, parts)
                 if use_cache:
-                    open(path, "w", encoding="utf-8").write(text)
+                    os.makedirs(self.cache_dir, exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(text)
                 return text
             except QuotaExhausted:  # every model is out of quota: fail fast, with a clear message
                 raise
-            except Exception as e:  # rate limit / transient server error -> back off and retry
+            except Exception as e:  # transient server error or timeout -> back off and retry
                 last = e
-                msg = str(e)
-                transient = any(c in msg for c in ("429", "500", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "timed out", "Timeout"))
+                transient = any(c in str(e) for c in ("500", "503", "504", "UNAVAILABLE", "timed out", "Timeout"))
                 if not transient or attempt == self.max_retries:
                     break
-                m = re.search(r"retry in ([\d.]+)s", msg, re.I)
-                time.sleep(min(float(m.group(1)) + 1 if m else 5 * 2 ** attempt, 60))
+                time.sleep(5 * 2 ** attempt)
         raise RuntimeError(f"LLM call failed after retries: {last}") from last
 
     def generate_json(self, system: str, parts: List[Part], use_cache: bool = True) -> Dict[str, Any]:
@@ -122,6 +122,15 @@ class LLMClient:
             if os.path.exists(path):
                 os.remove(path)
             raise
+
+    def generate_json_retry(self, system: str, parts: List[Part], use_cache: bool = True, what: str = "JSON") -> Dict[str, Any]:
+        """generate_json, asking once more (past the cache) when the reply is not valid JSON."""
+        try:
+            return self.generate_json(system, parts, use_cache)
+        except ValueError as e:
+            retry = parts + [("text", f"Your previous reply was not valid JSON ({e}). Return the complete {what} again, "
+                                      "with all strings correctly escaped.")]
+            return self.generate_json(system, retry, use_cache=False)
 
 
 def parse_json(text: str) -> Dict[str, Any]:

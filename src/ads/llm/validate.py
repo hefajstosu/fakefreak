@@ -1,11 +1,7 @@
-"""Validate LLM-generated ad variants against the parent profile.
-
-Usage: python -m ads.validate parent_profile.json variants_output.json [k]
-Exit code 1 if any check fails.
-"""
+"""Checks of LLM-generated variants against their parent profile (used by generate.py): locked fields kept, exact k,
+no duplicates, URLs and [[PART]] markers kept, text patches resolvable, demographics-only variants unchanged."""
 import json
 import re
-import sys
 
 SLOTS = {
     "entities.featured_people", "entities.companies_or_institutions",
@@ -32,7 +28,7 @@ def resolve_text(parent_text, v):
             errs.append("both edited_source_text and text_patches given")
         return v["edited_source_text"], errs
     text = parent_text
-    for i, patch in enumerate(v.get("text_patches", [])):
+    for i, patch in enumerate(v.get("text_patches") or []):
         span = patch.get("original_span", "")
         if not span or parent_text.count(span) != 1:
             errs.append(f"patch {i}: original_span must occur exactly once in parent text")
@@ -93,11 +89,3 @@ def validate(parent, out, k=None):
         seen.add(sig)
     return errors
 
-
-if __name__ == "__main__":
-    parent = json.load(open(sys.argv[1], encoding="utf-8"))
-    out = json.load(open(sys.argv[2], encoding="utf-8"))
-    k = int(sys.argv[3]) if len(sys.argv) > 3 else None
-    errs = validate(parent, out, k)
-    print("\n".join(errs) if errs else "OK")
-    sys.exit(1 if errs else 0)

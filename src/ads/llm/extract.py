@@ -1,6 +1,6 @@
 """Extraction: case_input.json -> profile.json (schemas/profile.schema.json).
 
-    python -m ads.llm.extract case_input.json profile.json [--model gemini-3.5-flash]
+    python -m ads.llm.extract case_input.json profile.json [--model gemini-3.1-flash-lite]
 
 Steps: build the labeled message from the case parts, call the LLM with prompts/extraction.txt,
 validate against the profile schema (one repair retry on errors), then overwrite the
@@ -12,19 +12,16 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from jsonschema import Draft7Validator
-
-from ..paths import DATA, PROMPTS, SCHEMAS
+from .. import schema
+from ..paths import DATA, PROMPTS
+from ..schema import TECH_KEYS
 from .client import LLMClient, Part, make_client
 
 PROMPT_PATH = os.path.join(PROMPTS, "extraction.txt")
-SCHEMA_PATH = os.path.join(SCHEMAS, "profile.schema.json")
 LABEL = {"ad_creative": "[AD_CREATIVE]", "bridge_page": "[BRIDGE_PAGE]",
          "offer_page": "[OFFER_PAGE]", "decoy_page": "[DECOY_PAGE]"}
 ORDER = ["ad_creative", "bridge_page", "offer_page", "decoy_page"]
 PAGE_CHARS = 6000  # per page part; longer pages keep their beginning and are marked with [...]
-TECH_KEYS = ["urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues",
-             "domain_and_cert_metadata"]
 # Optional technical fields that code computes and copies, and the model never sees (they are numbers and hashes,
 # useless to it; leaving them out keeps the prompt, and so the LLM cache key, identical to before they existed).
 CODE_ONLY_TECH_KEYS = ["page_fingerprints"]
@@ -48,8 +45,7 @@ def build_parts(case: Dict[str, Any]) -> List[Part]:
 
 
 def schema_errors(profile: Dict[str, Any]) -> List[str]:
-    v = Draft7Validator(json.load(open(SCHEMA_PATH, encoding="utf-8")))
-    return [f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message[:200]}" for e in v.iter_errors(profile)]
+    return schema.errors(profile, "profile.schema.json", limit=200)
 
 
 def enforce_technical(profile: Dict[str, Any], case: Dict[str, Any]) -> None:
@@ -65,23 +61,21 @@ def enforce_technical(profile: Dict[str, Any], case: Dict[str, Any]) -> None:
 
 def assemble_text(creative_text: str, case: Dict[str, Any]) -> str:
     """extracted_text_verbatim = the model's OCR of the creative + page text and transcripts from code."""
-    nl = chr(10)
-    out = ["[[AD_CREATIVE]]" + nl + (creative_text or "").strip()]
+    out = ["[[AD_CREATIVE]]\n" + (creative_text or "").strip()]
     for role in ORDER[1:]:
         for p in (x for x in case["parts"] if x["role"] == role and x.get("text")):
             t = p["text"]
-            out.append(f"[[{role.upper()}]]" + nl + (t if len(t) <= PAGE_CHARS else t[:PAGE_CHARS].rsplit(" ", 1)[0] + " [...]"))
+            out.append(f"[[{role.upper()}]]\n" + (t if len(t) <= PAGE_CHARS else t[:PAGE_CHARS].rsplit(" ", 1)[0] + " [...]"))
     for p in case["parts"]:
         if p.get("transcript"):
-            out.append("[[VIDEO_TRANSCRIPT]]" + nl + p["transcript"])
-    return nl.join(out)
+            out.append("[[VIDEO_TRANSCRIPT]]\n" + p["transcript"])
+    return "\n".join(out)
 
 
 def enforce_funnel(profile: Dict[str, Any], case: Dict[str, Any]) -> None:
     """Funnel stages are known from the case parts, so code sets them instead of the model."""
     roles = {p["role"] for p in case["parts"]}
-    stages = [s for s, r in (("ad", "ad_creative"), ("bridge_page", "bridge_page"),
-                             ("offer_page", "offer_page"), ("decoy_page", "decoy_page")) if r in roles]
+    stages = ["ad" if r == "ad_creative" else r for r in ORDER if r in roles]
     profile.setdefault("visual_and_production", {})["funnel_stages"] = stages
 
 
@@ -91,26 +85,17 @@ def finalize(profile: Dict[str, Any], case: Dict[str, Any]) -> None:
     enforce_funnel(profile, case)
 
 
-def _generate(client: LLMClient, system: str, parts: List[Part], use_cache: bool) -> Dict[str, Any]:
-    try:
-        return client.generate_json(system, parts, use_cache)
-    except ValueError as e:  # malformed JSON: ask once more, bypassing the cache
-        retry = parts + [("text", f"Your previous reply was not valid JSON ({e}). Return the complete JSON profile again, "
-                                  "with all strings correctly escaped.")]
-        return client.generate_json(system, retry, use_cache=False)
-
-
 def extract(case: Dict[str, Any], client: LLMClient, use_cache: bool = True) -> Dict[str, Any]:
     system = open(PROMPT_PATH, encoding="utf-8").read()
     parts = build_parts(case)
-    profile = _generate(client, system, parts, use_cache)
+    profile = client.generate_json_retry(system, parts, use_cache, what="JSON profile")
     finalize(profile, case)
     errors = schema_errors(profile)
     if errors:  # one repair attempt, showing the model its own errors
         repair = parts + [("text", "Your previous JSON was invalid:\n" + "\n".join(errors[:15]) +
                            "\nPrevious JSON:\n" + json.dumps(profile, ensure_ascii=False) +
                            "\nReturn the corrected full JSON profile only.")]
-        profile = _generate(client, system, repair, use_cache)
+        profile = client.generate_json_retry(system, repair, use_cache, what="JSON profile")
         finalize(profile, case)
         errors = schema_errors(profile)
     if errors:

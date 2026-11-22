@@ -27,6 +27,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+from ..database import case_ids
 from ..paths import CACHE, CASES, DATA
 
 MODELS_DIR = os.path.join(CACHE, "models")
@@ -159,7 +160,7 @@ def main() -> None:
     if a.download:
         download()
         print("models ready in", MODELS_DIR)
-    ids = sorted(c for c in os.listdir(CASES) if os.path.exists(os.path.join(CASES, c, "manifest.json")))
+    ids = case_ids("manifest.json")
     if a.matrix:
         faces = {c: pick(case_faces(c, a.refresh), a.source) for c in ids}
         print(f"faces per case ({a.source}):", {c: len(f) for c, f in faces.items()})

@@ -4,6 +4,7 @@ import re
 from typing import List
 
 from ..preprocess.domain_meta import linking_facts
+from ..preprocess.page_fp import sketch_similarity
 from ..urls import domains  # noqa: F401 (part of this module's API: domains of a URL list)
 from .normalize import norm, parse_amount
 from .primitives import Score, best_assignment, name_similarity, numeric_similarity, set_similarity
@@ -84,7 +85,7 @@ def page_structure(a, b) -> Score:
     sa, sb = (a or {}).get("structure") or [], (b or {}).get("structure") or []
     if not sa or not sb:
         return None
-    return max(sum(x == y for x, y in zip(u, v)) / max(len(u), 1) for u in sa for v in sb)
+    return max(sketch_similarity(u, v) for u in sa for v in sb)
 
 
 # ---------------------------------------------------------------- tokens of the exact-match anchors

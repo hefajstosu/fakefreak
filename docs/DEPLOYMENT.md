@@ -24,8 +24,9 @@ arm64 was built locally, amd64 is built by CI.
 | `GEMINI_API_KEY` | `.env` (optional) | none | LLM key; without it every case already in `data/` works, analysing new material does not |
 | `ADS_HOST` / `--host` | env or flag of `ads.web.server` | `127.0.0.1` (image: `0.0.0.0` inside the container) | listen address |
 | `ADS_PORT` / `--port` | env or flag; in compose the host port | `8000` | panel port |
+| `ADS_MAX_UPLOAD_MB` | env | `200` | total size of the files sent with one analysis |
 | `ADS_UID`, `ADS_GID` | env for `docker compose` | `1000` | container user, set to `$(id -u)` / `$(id -g)` on Linux if saving cases fails |
-| model, fallbacks, cache | `config/llm.yaml` | `gemini-3.1-flash-lite`, two fallbacks | provider, models, retries, prompt files |
+| model, fallbacks, cache | `config/llm.yaml` | `gemini-3.1-flash-lite`, two fallbacks | provider, models, retries, variant settings |
 | weights, ignored values | `config/cluster.yaml` | see file | similarity weights, validated on load (unknown name or negative weight fails fast) |
 
 Switching the LLM provider is one `LLMClient` subclass in `src/ads/llm/client.py` (`_call`) plus `provider:` in
@@ -49,7 +50,7 @@ Switching the LLM provider is one `LLMClient` subclass in `src/ads/llm/client.py
 - The container runs as an unprivileged user (uid 1000), not root.
 - The live URL scanner follows only http/https, refuses every hop that resolves to a private, loopback, link-local or
   reserved address (no probing of the internal network), never runs JavaScript, and caps time (15 s), size (3 MB per
-  response) and hops (8). API request bodies are capped at 200 kB.
+  response) and hops (8). JSON request bodies are capped at 200 kB, file uploads at `ADS_MAX_UPLOAD_MB`; uploaded files keep only a safe base name inside their analysis folder.
 - The API key is read from the environment, never logged or returned (`/api/status` only says whether one is set).
 - Free-tier Gemini inputs may be used by Google to improve its products. For real, non-sample data use a paid tier or a
   self-hosted model behind the same `LLMClient` interface.
@@ -82,7 +83,7 @@ cache; the panel alone keeps only score and evidence per pair.
   analyst saved a case, so N new pairs are scored and the campaigns are re-clustered.
 - What made this possible (identical scores and groups, checked on the sample profiles): memoised string
   normalisation in the similarity (about 2x faster per pair on distinct profiles, 5x on the benchmark set), a pair table remembered by profile content, and
-  campaigns remembered per database state (`analyze.pair_table`, `analyze.campaigns`).
+  campaigns remembered per database state (`analysis.pair_table`, `analysis.campaigns`).
 - Copies repeat strings, so the string caches hit more often than on N distinct articles; for those, use the cold
   per-pair time as the upper bound (about 0.8 ms, i.e. about 7 minutes of CPU for the first table of 1000 articles,
   paid once per process start).

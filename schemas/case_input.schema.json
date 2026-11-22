@@ -45,7 +45,7 @@
         },
         "images": {
           "$ref": "#/definitions/pathArray",
-          "description": "Images shown to the model: ad screenshots, or the 2x2 contact sheet of a video (contact_sheet.jpg). Screenshots should already be cropped to the sponsored item where possible."
+          "description": "Images shown to the model: ad screenshots, or the 2x2 contact sheet of a video (contact_sheet_<i>.jpg). Screenshots should already be cropped to the sponsored item where possible."
         },
         "transcript": {
           "type": ["string", "null"],
@@ -64,7 +64,7 @@
     },
     "identity": {
       "type": "object",
-      "description": "A person shown in the creative whose identity was established OUTSIDE the LLM: by the face-recognition module, by a human annotator, or from a caption. Mirrors the output of src/ads/preprocess/faces.py.",
+      "description": "A person shown in the creative whose identity was established OUTSIDE the LLM: by a human annotator or from a caption (never by the LLM from a face).",
       "additionalProperties": false,
       "required": ["name", "category_or_role", "identity_basis"],
       "properties": {
@@ -99,7 +99,7 @@
     },
     "technical_summary": {
       "type": "object",
-      "description": "Output of src/ads/preprocess/har.py (the 'technical_artifacts' object, minus ad_library_metadata, which comes from the creative). Empty arrays when no network log exists.",
+      "description": "Written by code (preprocess/har.py, url_scan.py, page_fp.py, domain_meta.py): the 'technical_artifacts' object minus ad_library_metadata, which comes from the creative. Empty arrays when no network log exists.",
       "additionalProperties": false,
       "required": ["urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues",
                    "domain_and_cert_metadata"],

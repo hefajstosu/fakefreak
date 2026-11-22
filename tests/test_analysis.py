@@ -141,7 +141,7 @@ def test_build_case_from_html_har_and_text_files_without_touching_the_template(t
     assert roles == ["bridge_page", "bridge_page"] and "Tekst artykułu" in case["parts"][1]["text"]
     t = case["technical_summary"]
     assert t["urls_and_domains"] and t["domain_and_cert_metadata"] == ["registered:2026-01-01"]
-    assert t["page_fingerprints"]["structure"] and an.EMPTY_TECH["urls_and_domains"] == []
+    assert t["page_fingerprints"]["structure"]
     alone, _ = an.build_case(hars=[str(hf)])                      # a log alone: its page text is read
     assert alone["parts"][0]["text"].startswith("Kup teraz")
     assert an.classify_files(["a.PNG", "b.har", "c.exe"]) == {"image": ["a.PNG"], "har": ["b.har"], "unsupported": ["c.exe"]}

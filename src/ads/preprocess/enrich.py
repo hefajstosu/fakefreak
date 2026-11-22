@@ -16,17 +16,10 @@ import os
 import sys
 from typing import Dict, List
 
-from jsonschema import Draft7Validator
-
-from ..paths import CASES, DATA, SCHEMAS
+from ..database import case_ids
+from ..paths import CASES, DATA
+from ..schema import check
 from . import page_fp
-
-
-def _validate(obj: dict, schema_file: str, what: str) -> None:
-    schema = json.load(open(os.path.join(SCHEMAS, schema_file), encoding="utf-8"))
-    errs = [f"{'/'.join(map(str, e.absolute_path))}: {e.message[:150]}" for e in Draft7Validator(schema).iter_errors(obj)]
-    if errs:
-        raise ValueError(f"{what} invalid: " + "; ".join(errs[:5]))
 
 
 def enrich_case(cid: str, domain_meta: bool = False) -> Dict[str, object]:
@@ -38,7 +31,7 @@ def enrich_case(cid: str, domain_meta: bool = False) -> Dict[str, object]:
     if domain_meta:
         from . import domain_meta as dm
         tech["domain_and_cert_metadata"] = dm.case_metadata(tech, manifest, DATA)
-    _validate(case, "case_input.schema.json", f"case {cid} case_input")
+    check(case, "case_input.schema.json", f"case {cid} case_input")
     out = {"case": cid, "pages": len(tech["page_fingerprints"]["structure"]),
            "images": len(tech["page_fingerprints"]["images"]), "domain_meta": len(tech["domain_and_cert_metadata"])}
     pf = os.path.join(d, "profile.json")
@@ -47,7 +40,7 @@ def enrich_case(cid: str, domain_meta: bool = False) -> Dict[str, object]:
         ta = profile.setdefault("technical_artifacts", {})
         ta["page_fingerprints"] = tech["page_fingerprints"]
         ta["domain_and_cert_metadata"] = tech["domain_and_cert_metadata"]
-        _validate(profile, "profile.schema.json", f"case {cid} profile")
+        check(profile, "profile.schema.json", f"case {cid} profile")
     json.dump(case, open(os.path.join(d, "case_input.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if profile is not None:
         json.dump(profile, open(pf, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
@@ -60,8 +53,7 @@ def main(argv: List[str] = None) -> None:
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--domain-meta", action="store_true", help="also query public domain/infrastructure metadata")
     a = ap.parse_args(argv)
-    ids = sorted(c for c in os.listdir(CASES) if os.path.exists(os.path.join(CASES, c, "manifest.json"))) \
-        if a.all else a.cases
+    ids = case_ids("manifest.json") if a.all else a.cases
     if not ids:
         sys.exit("give case ids or --all")
     for cid in ids:

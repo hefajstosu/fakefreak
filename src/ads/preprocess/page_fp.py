@@ -14,11 +14,13 @@ pairs against at most 0.34 for unrelated pairs; identical image files only insid
 import base64
 import hashlib
 import io
-import json
 import os
 import re
 from html.parser import HTMLParser
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+
+from . import har
+from .html_text import html_str_to_text
 
 PERM = 64            # MinHash size
 SHINGLE = 4          # tags per path shingle
@@ -135,21 +137,26 @@ def from_saved_page(html_path: str) -> Dict[str, list]:
     return {"structure": [sketch] if sketch else [], "images": image_hashes(images)}
 
 
+def _html_bodies(path: str, get_only: bool = False) -> Iterator[str]:
+    """The HTML documents recorded in a HAR log (base64 bodies decoded)."""
+    for e in har.entries(path):
+        content = e.get("response", {}).get("content", {}) or {}
+        if "html" not in (content.get("mimeType") or "").lower() or not content.get("text"):
+            continue
+        if get_only and e.get("request", {}).get("method") != "GET":
+            continue
+        text = content["text"]
+        yield base64.b64decode(text).decode("utf-8", "ignore") if content.get("encoding") == "base64" else text
+
+
 def from_har(path: str) -> Dict[str, list]:
     """Fingerprints of the HTML documents and image bodies recorded in a HAR log (bodies only, never headers)."""
-    entries = json.load(open(path, encoding="utf-8"))["log"]["entries"]
-    sketches, images = [], []
-    for e in entries:
+    sketches = [s for s in map(structure_sketch, _html_bodies(path, get_only=True)) if s]
+    images = []
+    for e in har.entries(path):
         content = e.get("response", {}).get("content", {}) or {}
         mime, text = (content.get("mimeType") or "").lower(), content.get("text")
-        if not text:
-            continue
-        if "html" in mime and e.get("request", {}).get("method") == "GET":
-            body = base64.b64decode(text).decode("utf-8", "ignore") if content.get("encoding") == "base64" else text
-            s = structure_sketch(body)
-            if s:
-                sketches.append(s)
-        elif mime.startswith("image/") and "svg" not in mime and content.get("encoding") == "base64":
+        if text and mime.startswith("image/") and "svg" not in mime and content.get("encoding") == "base64":
             try:
                 images.append(base64.b64decode(text))
             except ValueError:
@@ -178,15 +185,8 @@ def from_manifest(manifest: Dict, data_dir: str) -> Dict[str, list]:
 
 def har_page_texts(path: str, min_chars: int = 200) -> List[str]:
     """Readable text of the HTML documents recorded in a HAR log (for a case given only as a log)."""
-    from .assemble import html_str_to_text
     out = []
-    for e in json.load(open(path, encoding="utf-8"))["log"]["entries"]:
-        content = e.get("response", {}).get("content", {}) or {}
-        if "html" not in (content.get("mimeType") or "").lower() or not content.get("text"):
-            continue
-        body = content["text"]
-        if content.get("encoding") == "base64":
-            body = base64.b64decode(body).decode("utf-8", "ignore")
+    for body in _html_bodies(path):
         t = html_str_to_text(body)
         if len(t) >= min_chars and t not in out:
             out.append(t)

@@ -1,15 +1,12 @@
-"""Build a [TECHNICAL_SUMMARY] block from one or more HAR files of a single case.
-
-Usage: python -m ads.preprocess.har out.json first.har [second.har ...]
-HAR files are given in funnel order. Output follows the `technical_artifacts`
-schema (minus ad_library_metadata, which comes from the ad creative).
+"""Technical traces of a case from its HAR network logs (funnel order): `process(path, tech)` adds the redirect chain,
+tracker IDs, form endpoints and first-party file names to a technical_summary (schema.empty_tech()).
 
 Privacy: cookies, headers, request/response bodies and IPs are never copied.
 Only URLs, tracker IDs, parameter NAMES and first-party file names are kept.
 """
 import json
 import re
-import sys
+from typing import List
 from urllib.parse import urlsplit
 
 from ..urls import host, is_mass, reg_domain, sanitize_url
@@ -31,11 +28,17 @@ def add(lst, item):
         lst.append(item)
 
 
+def entries(path: str) -> List[dict]:
+    """The request/response entries of a HAR log."""
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)["log"]["entries"]
+
+
 def process(path, out):
-    entries = json.load(open(path, encoding="utf-8"))["log"]["entries"]
-    entries.sort(key=lambda e: e.get("startedDateTime", ""))
+    entries_ = entries(path)
+    entries_.sort(key=lambda e: e.get("startedDateTime", ""))
     page_hosts = set()
-    for e in entries:
+    for e in entries_:
         req, res = e["request"], e["response"]
         url, h = req["url"], host(req["url"])
         mime = (res.get("content", {}).get("mimeType") or "").lower()
@@ -71,24 +74,10 @@ def process(path, out):
                 clue += " fields=" + ",".join(names)
             add(out["dom_and_form_clues"], clue)
     # distinctive first-party JS/CSS filenames
-    for e in entries:
+    for e in entries_:
         url = e["request"]["url"]
         h = host(url)
         fn = urlsplit(url).path.rsplit("/", 1)[-1]
         if fn.endswith((".js", ".css")) and reg_domain(h) in page_hosts and not is_mass(h):
             add(out["dom_and_form_clues"], f"file:{fn}")
 
-
-def main(out_path, har_paths):
-    out = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [],
-           "dom_and_form_clues": [], "domain_and_cert_metadata": []}
-    for p in har_paths:
-        process(p, out)
-    json.dump({"technical_artifacts": out}, open(out_path, "w", encoding="utf-8"),
-              ensure_ascii=False, indent=2)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2:])
