@@ -51,7 +51,7 @@ def test_page_and_static_files_are_served_but_nothing_outside(panel):
     base, _ = panel
     code, body = call(base + "/")
     assert code == 200 and b"Panel analizy" in body
-    assert call(base + "/app.js")[0] == 200
+    assert call(base + "/js/main.js")[0] == 200 and call(base + "/js/../index.html")[0] == 200
     assert call(base + "/../server.py")[0] == 404
     assert call(base + "/api/image/zzz")[0] == 404
 
