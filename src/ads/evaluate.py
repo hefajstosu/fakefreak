@@ -14,7 +14,7 @@ import sys
 from itertools import combinations
 from typing import Dict, Set
 
-from .cluster import cluster, pair_scores
+from .clustering import cluster, load_variants, pair_scores
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -54,10 +54,10 @@ def prf(pred: Set[tuple], truth: Set[tuple]):
     return p, r, (2 * p * r / (p + r) if p + r else 0.0)
 
 
-def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None) -> dict:
+def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None, variants=None, variant_gate=None) -> dict:
     ids = set(gold.get("case_ids") or profiles)  # cases saved from the demo are not in the gold labels
     profiles = {k: v for k, v in profiles.items() if k in ids}
-    scores = {k: v for k, v in (scores or pair_scores(profiles)).items() if k[0] in ids and k[1] in ids}
+    scores = {k: v for k, v in (scores or pair_scores(profiles, variants, variant_gate)).items() if k[0] in ids and k[1] in ids}
     sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
     triples = [t for t in gold["ranking_triples"] if {t["anchor"], t["closer"], t["farther"]} <= set(profiles)]
     ok = [(t, sc(t["anchor"], t["closer"]), sc(t["anchor"], t["farther"])) for t in triples]
@@ -80,12 +80,19 @@ def main() -> None:
     ap.add_argument("--tau", type=float, default=0.6)
     ap.add_argument("--gold", default=os.path.join(REPO, "data", "gold", "groups.local.json"))
     ap.add_argument("--matrix", action="store_true")
+    ap.add_argument("--variants", action="store_true",
+                    help="use the synthetic variants (data/cases/*/variants.json) as extra comparisons; they are never grouped")
+    ap.add_argument("--gate", type=float, default=None, help="variant gate (see clustering/pairs.py); needs --variants")
     a = ap.parse_args()
     if not os.path.exists(a.gold):
         a.gold = os.path.join(REPO, "data", "gold", "groups.json")
     profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
-    scores = pair_scores(profiles)
+    variants = load_variants(profiles) if a.variants else None
+    stats = {}
+    scores = pair_scores(profiles, variants, a.gate, stats)
     r = evaluate(profiles, gold, a.tau, scores)
+    if a.variants:
+        print(f"variants: {sum(len(v) for v in variants.values())} for {len(variants)} cases; comparisons {stats}")
     print(f"cases: {len(profiles)}  gold: {os.path.basename(a.gold)}  tau: {a.tau}")
     print(f"ranking triples: {sum(t[3] for t in r['triples'])}/{len(r['triples'])} correct")
     for t, c, f, ok in r["triples"]:

@@ -21,31 +21,18 @@ import sys
 from typing import Dict, List
 
 from .evaluate import REPO, gold_pairs, load_profiles
-from .llm.generate import profile_sha, variant_to_profile
+from .clustering.pairs import best_score
+from .clustering.variants import load_variants
 from .similarity import score
 
 DEMO_SLOT = "non_grouping_attributes.unidentified_people_demographics"
-
-
-def load_variants(profiles: Dict[str, dict], name: str = "variants.json") -> Dict[str, List[dict]]:
-    out: Dict[str, List[dict]] = {}
-    for cid, parent in profiles.items():
-        f = os.path.join(REPO, "data", "cases", cid, name)
-        if os.path.exists(f):
-            data = json.load(open(f, encoding="utf-8"))
-            if data.get("parent_profile_sha") not in (None, profile_sha(cid)):
-                print(f"warning: variants of case {cid} are stale (profile changed since generation), skipped: {name}")
-                continue
-            parent = dict(parent, _case_id=cid)
-            out[cid] = [variant_to_profile(parent, v) for v in data["variants"]]
-    return out
 
 
 def partners(gold: dict, cid: str, levels) -> set:
     return {b if a == cid else a for a, b in gold_pairs(gold, levels) if cid in (a, b)}
 
 
-def run(profiles, variants, gold, taus):
+def run(profiles, variants, gold, taus, gate=None, stats=None):
     strict_lv, broad_lv = {"same_campaign", "same_template"}, {"same_campaign", "same_template", "same_scheme"}
     rows = {"without": [], "with": []}
     for x in profiles:
@@ -54,7 +41,7 @@ def run(profiles, variants, gold, taus):
             continue
         others = [y for y in profiles if y != x]
         s_wo = {y: score(profiles[x], profiles[y])["score"] for y in others}
-        s_w = {y: max([s_wo[y]] + [score(profiles[x], v)["score"] for v in variants.get(y, [])]) for y in others}
+        s_w = {y: best_score(profiles[x], profiles[y], None, variants.get(y), gate, stats)["score"] for y in others}
         for cond, sc in (("without", s_wo), ("with", s_w)):
             neg = [y for y in others if y not in bp]
             wins = [sc[p] > sc[n] for p in sp for n in neg]
@@ -77,6 +64,8 @@ def summarize(rows, taus):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--taus", default="0.5,0.6,0.7")
+    ap.add_argument("--gate", type=float, default=None,
+                    help="variant gate: skip variant comparisons for pairs scoring below this without hard evidence")
     ap.add_argument("--gold", default=os.path.join(REPO, "data", "gold", "groups.local.json"))
     a = ap.parse_args()
     if not os.path.exists(a.gold):
@@ -87,7 +76,16 @@ def main() -> None:
     variants = load_variants(profiles)
     n_var = sum(len(v) for v in variants.values())
     print(f"cases: {len(profiles)}, cases with variants: {sorted(variants)}, variants: {n_var}")
-    summ = summarize(run(profiles, variants, gold, taus), taus)
+    stats: Dict[str, int] = {}
+    rows = run(profiles, variants, gold, taus, a.gate, stats)
+    summ = summarize(rows, taus)
+    if a.gate is not None:
+        full = run(profiles, variants, gold, taus)["with"]
+        lost = [(r["case"], p, round(f["sc"][p], 3), round(r["sc"][p], 3)) for r, f in zip(rows["with"], full)
+                for p in r["sp"] if f["sc"][p] != r["sc"][p]]
+        done, skipped = stats.get("variant_comparisons", 0), stats.get("variant_comparisons_skipped", 0)
+        print(f"gate {a.gate}: variant comparisons done {done}, skipped {skipped}; "
+              f"gold partner scores changed by the gate: {lost or 'none'}")
     keys = list(summ["without"])
     print(f"\n{'metric':<18}{'without':>10}{'with':>10}{'delta':>10}")
     for k in keys:

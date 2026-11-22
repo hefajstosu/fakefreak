@@ -20,7 +20,7 @@ anchors:                       # exact-match technical artifacts, weighted by ra
   redirect_chain_domains: 0.9
   dom_and_form_clues: 0.8
   ad_library_page_name: 0.7
-ignore_values: []              # mass-infrastructure values never used as evidence
+ignore_values: []              # mass-infrastructure values (exact strings) never used as anchor evidence; read by sim_functions/config.py
 thresholds:
   global_tau: 0.60
   k_sigma: 2.0
