@@ -33,6 +33,7 @@ from jsonschema import Draft7Validator
 
 from ..paths import CASES, DATA, SCHEMAS
 from . import har as harmod
+from . import page_fp
 from . import video as videomod
 
 MAX_TEXT = 40000
@@ -103,6 +104,7 @@ def assemble(case_id: str) -> Dict[str, Any]:
             "dom_and_form_clues": [], "domain_and_cert_metadata": []}
     for h in m.get("hars", []):
         harmod.process(os.path.join(DATA, h), tech)
+    tech["page_fingerprints"] = page_fp.from_manifest(m, DATA)  # page structure and image kit (code-owned)
     case = {"schema_version": "1.0", "case_id": m["case_id"], "parts": parts,
             "technical_summary": tech, "resolved_identities": m.get("identities", [])}
     schema = json.load(open(os.path.join(SCHEMAS, "case_input.schema.json"), encoding="utf-8"))

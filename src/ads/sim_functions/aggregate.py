@@ -24,11 +24,13 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "topic": 0.5,          # (*)
     "funnel_stages": 0.3,  # (*)
     "keywords": 0.3,       # (*)
+    "page_structure": 0.8,  # (*) same weight as landing_page_template, its LLM counterpart
 }
 # Exact-match technical anchors; computed only when anchor_stats is passed (see below).
 ANCHOR_WEIGHTS: Dict[str, float] = {
     "tracker_ids": 1.0, "redirect_chain_domains": 0.9, "dom_and_form_clues": 0.8,
     "ad_library_page_name": 0.7,
+    "page_assets": 0.8,    # same weight as dom_and_form_clues: another first-party trace of how the page was built
 }
 
 
@@ -97,6 +99,8 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
                                            get(b, "core_narrative.call_to_action"), embed),
         "embedding": A.canonical_comparison_text(a.get("canonical_comparison_text"),
                                                  b.get("canonical_comparison_text"), embed),
+        "page_structure": A.page_structure(get(a, "technical_artifacts.page_fingerprints"),
+                                           get(b, "technical_artifacts.page_fingerprints")),
     }
     if anchor_stats is not None:
         ta, tb = a.get("technical_artifacts", {}), b.get("technical_artifacts", {})
@@ -109,6 +113,8 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
                                                       tb.get("dom_and_form_clues"), **kw)
         v["ad_library_page_name"] = A.ad_library_page_name(
             get(ta, "ad_library_metadata.page_id_or_name"), get(tb, "ad_library_metadata.page_id_or_name"))
+        v["page_assets"] = A.anchor_similarity(get(ta, "page_fingerprints.images"), get(tb, "page_fingerprints.images"),
+                                               **kw)
     return v
 
 

@@ -16,6 +16,7 @@ from .normalize import norm
 GENERIC_FILES = {"main.js", "main.css", "style.css", "styles.css", "app.js", "script.js", "jquery.min.js",
                  "sw.js", "metrics.js", "email-decode.min.js", "utils.js", "slider.js", "video.js"}
 MIN_SHARED_ENDPOINTS = 2  # one shared generic path (e.g. /api/v1/) is too weak; a platform shares several
+MIN_SHARED_IMAGES = 2     # one shared picture can be a stock photo; an operator's page kit shares several
 
 
 def _reg_domain(host: str) -> str:
@@ -52,6 +53,10 @@ def strong_links(a: dict, b: dict) -> List[str]:
             continue
         if common:
             out.append(f"{label}: {sorted(common)[0]}")
+    images = set(get(a, "technical_artifacts.page_fingerprints.images") or []) & \
+        set(get(b, "technical_artifacts.page_fingerprints.images") or [])
+    if len(images) >= MIN_SHARED_IMAGES:
+        out.append(f"shared page images: {len(images)} identical image files")
     if fa["page"] and fa["page"] == fb["page"]:
         out.append(f"same sponsoring page: {fa['page']}")
     return out

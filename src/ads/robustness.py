@@ -35,6 +35,8 @@ def _infra(p):
     for k in ("urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues", "domain_and_cert_metadata"):
         ta[k] = []
     ta["ad_library_metadata"]["page_id_or_name"] = None
+    if ta.get("page_fingerprints"):
+        ta["page_fingerprints"] = {**ta["page_fingerprints"], "images": []}
 
 
 def _text(p):
@@ -45,6 +47,9 @@ def _text(p):
 
 def _templates(p):
     p["visual_and_production"].update(ad_creative_template=None, landing_page_template=None)
+    ta = p["technical_artifacts"]
+    if ta.get("page_fingerprints"):
+        ta["page_fingerprints"] = {**ta["page_fingerprints"], "structure": []}
 
 
 def _scam_topic(p):
@@ -67,9 +72,9 @@ def _props_amounts(p):
 
 
 GROUPS: Dict[str, Callable] = {
-    "infrastructure (trackers, endpoints, domains, files, sender page)": _infra,
+    "infrastructure (trackers, endpoints, domains, files, page images, sender page)": _infra,
     "text (summary, narrative, promise, CTA)": _text,
-    "templates (ad + landing page)": _templates,
+    "templates (ad + landing page, page structure)": _templates,
     "scam type + topic": _scam_topic,
     "entities (product, people, companies, media)": _entities,
     "persuasion devices": _persuasion,

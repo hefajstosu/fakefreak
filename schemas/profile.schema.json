@@ -10,6 +10,15 @@
   "definitions": {
     "strOrNull": {"type": ["string", "null"]},
     "strArray": {"type": "array", "items": {"type": "string"}},
+    "pageFingerprints": {
+      "type": "object", "additionalProperties": false,
+      "description": "Written by code (src/ads/preprocess/page_fp.py), never by the model: MinHash sketches of each page's tag paths and CSS classes, and content hashes of the large page images. Optional.",
+      "required": ["structure", "images"],
+      "properties": {
+        "structure": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0}}},
+        "images": {"$ref": "#/definitions/strArray"}
+      }
+    },
     "scamType": {"enum": ["fake_investment", "fake_online_casino", "miracle_cure", "banking_phishing",
       "fake_giveaway", "fake_subsidy_or_payout", "fake_online_shop", "political_disinformation",
       "impersonation_other", "not_suspicious", "other"]},
@@ -120,6 +129,7 @@
         "tracker_ids": {"$ref": "#/definitions/strArray"},
         "dom_and_form_clues": {"$ref": "#/definitions/strArray"},
         "domain_and_cert_metadata": {"$ref": "#/definitions/strArray"},
+        "page_fingerprints": {"$ref": "#/definitions/pageFingerprints"},
         "ad_library_metadata": {
           "type": "object", "additionalProperties": false,
           "required": ["page_id_or_name", "payer_name", "dates_active"],

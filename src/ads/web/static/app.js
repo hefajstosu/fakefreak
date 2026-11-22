@@ -32,10 +32,12 @@ const FEATURE = {
   impersonated_media: "Podszywane media", narrative: "Schemat narracji", promise: "Obietnica i mechanizm",
   call_to_action: "Wezwanie do działania", embedding: "Streszczenie porównawcze", keywords: "Słowa kluczowe",
   setting_and_props: "Sceneria i rekwizyty", amounts_dates_locations: "Kwoty, daty, miejsca",
+  page_structure: "Szkielet strony (HTML, klasy CSS)", page_assets: "Zestaw obrazów strony",
 };
 const EVIDENCE = {
   tracker: "wspólny identyfikator trackera", endpoint: "wspólne endpointy platformy (sesja/formularz)",
-  file: "wspólny charakterystyczny plik strony", domain: "wspólna domena", page: "ta sama strona sponsorująca", other: "dowód",
+  file: "wspólny charakterystyczny plik strony", domain: "wspólna domena", page: "ta sama strona sponsorująca",
+  images: "wspólne identyczne obrazy strony (ten sam zestaw)", other: "dowód",
 };
 const MISSING = { a: "brak danych po stronie A", b: "brak danych po stronie B", both: "brak danych po obu stronach",
   unknown: "nie do porównania", supporting: "różne, ale to cecha wspierająca: różnica nie obniża wyniku" };
@@ -45,7 +47,7 @@ const $ = (id) => document.getElementById(id);
 const f2 = (x) => (x == null ? "–" : Number(x).toFixed(2));
 const pretty = (v) => (v == null ? "–" : SCAM[v] || String(v).replaceAll("_", " "));
 const evText = (e) => `${EVIDENCE[e.kind] || e.kind}: ${e.value}`;
-const RAW_EVIDENCE = [["shared tracker ID", "tracker"], ["shared session/form endpoint", "endpoint"],
+const RAW_EVIDENCE = [["shared tracker ID", "tracker"], ["shared session/form endpoint", "endpoint"], ["shared page images", "images"],
   ["shared distinctive script/style file", "file"], ["shared domain", "domain"], ["same sponsoring page", "page"]];
 const evRaw = (s) => {  // a strong_links string from the API -> Polish
   const hit = RAW_EVIDENCE.find(([prefix]) => s.startsWith(prefix));
@@ -160,8 +162,16 @@ function valueText(feature, v) {
 const clipText = (t, n = 80) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 const listText = (items, n = 6) => items.slice(0, n).map((x) => clipText(String(x))).join(", ") + (items.length > n ? ` (+${items.length - n})` : "");
 
+function fingerprintText(f) {  // page fingerprints are numbers and hashes: describe them instead of listing them
+  const v = f.values || {};
+  if ("shared_count" in v) return `${v.shared_count} identycznych obrazów (strony: ${v.images_a} i ${v.images_b} obrazów)`;
+  if ("pages_a" in v) return `podobieństwo szkieletu najbliższych stron ${Math.round((f.similarity || 0) * 100)}% (stron: ${v.pages_a} i ${v.pages_b})`;
+  return null;
+}
+
 function sharedText(f) {  // the same content as sharedOf(), as plain text for the report
   const v = f.values || {};
+  if (fingerprintText(f)) return fingerprintText(f);
   if (v.shared_words) return listText(v.shared_words, 10) || "brak wspólnych słów";
   if (v.shared) return listText(v.shared.map((m) => (m.a === m.b ? valueText(f.feature, m.a) : `${m.a} ≈ ${m.b}`))) || "nic wspólnego";
   if ("a" in v) return valueText(f.feature, v.a);
@@ -170,6 +180,7 @@ function sharedText(f) {  // the same content as sharedOf(), as plain text for t
 
 function sharedOf(f) {
   const v = f.values || {};
+  if (fingerprintText(f)) return el("span", {}, fingerprintText(f));
   if (v.shared_words) return v.shared_words.length ? chips(v.shared_words.slice(0, 14)) : el("span", { class: "none", text: "brak wspólnych słów" });
   if (v.shared) {
     if (!v.shared.length) return el("span", { class: "none", text: "nic wspólnego" });
@@ -181,6 +192,7 @@ function sharedOf(f) {
 
 function differenceOf(f, nameA, nameB) {
   const v = f.values || {};
+  if (fingerprintText(f)) return el("span", {}, fingerprintText(f));
   const side = (label, items) => el("div", { class: "side" }, [el("span", { class: "who", text: label }),
     items.length ? chips(items.slice(0, 8).map((x) => clipText(valueText(f.feature, x), 90)).concat(items.length > 8 ? [`+${items.length - 8}`] : []), "tag muted")
       : el("span", { class: "none", text: "–" })]);

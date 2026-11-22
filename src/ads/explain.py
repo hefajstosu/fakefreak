@@ -45,6 +45,8 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
     "redirect_chain_domains": ("infrastructure", "domains", "technical_artifacts.redirect_chain"),
     "dom_and_form_clues": ("infrastructure", "anchor", "technical_artifacts.dom_and_form_clues"),
     "ad_library_page_name": ("infrastructure", "enum", "technical_artifacts.ad_library_metadata.page_id_or_name"),
+    "page_assets": ("infrastructure", "images", "technical_artifacts.page_fingerprints"),
+    "page_structure": ("templates", "structure", "technical_artifacts.page_fingerprints"),
     "scam_type": ("core", "enum", "core_narrative.ad_goal_scam_type"),
     "topic": ("core", "enum", "core_narrative.topic"),
     "ad_creative_template": ("templates", "enum", "visual_and_production.ad_creative_template"),
@@ -64,6 +66,7 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
     "amounts_dates_locations": ("surface", "amounts", "entities.amounts_dates_locations"),
 }
 EVIDENCE_KINDS = (("shared tracker ID", "tracker"), ("shared session/form endpoint", "endpoint"),
+                  ("shared page images", "images"),
                   ("shared distinctive script/style file", "file"), ("shared domain", "domain"),
                   ("same sponsoring page", "page"))
 MATCH = 0.5        # a pair of names/values counts as "shared" from this similarity on
@@ -137,6 +140,11 @@ def _values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
         return _greedy(va or [], vb or [], A._person_pair, _person)
     if kind == "names":
         return _greedy(va or [], vb or [], name_similarity)
+    if kind == "structure":  # page skeletons: the number of pages compared on each side
+        return {"pages_a": len((va or {}).get("structure") or []), "pages_b": len((vb or {}).get("structure") or [])}
+    if kind == "images":     # page image kits: counts only, hashes mean nothing to a reader
+        ia, ib = set((va or {}).get("images") or []), set((vb or {}).get("images") or [])
+        return {"shared_count": len(ia & ib), "images_a": len(ia), "images_b": len(ib)}
     if kind == "amounts":
         va, vb = va or {}, vb or {}
         out = _greedy(va.get("amounts") or [], vb.get("amounts") or [], A._amount_pair)
@@ -149,6 +157,8 @@ def _values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
 
 
 def _empty(v: Any) -> bool:
+    if isinstance(v, dict) and set(v) == {"structure", "images"}:  # page fingerprints: empty without pages
+        return not v["structure"] and not v["images"]
     if isinstance(v, dict):
         return all(_empty(x) for x in v.values())
     return v is None or v == [] or (isinstance(v, str) and not v.strip())

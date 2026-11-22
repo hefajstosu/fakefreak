@@ -41,8 +41,22 @@ def variant_to_profile(parent: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, A
     return p
 
 
+CODE_OWNED_EVIDENCE = ("page_fingerprints", "domain_and_cert_metadata")
+
+
 def profile_sha(case_id: str) -> str:
-    return hashlib.sha256(open(os.path.join(CASES, case_id, "profile.json"), "rb").read()).hexdigest()[:16]
+    """Identity of the profile a variant was generated from. Evidence that code adds later (page fingerprints, domain
+    metadata; see preprocess/enrich.py) is left out: variants inherit technical artifacts and never change them, so
+    enriching a profile must not make its variants stale. For a profile without that evidence this is the sha of the
+    file itself, as before."""
+    raw = open(os.path.join(CASES, case_id, "profile.json"), "rb").read()
+    p = json.loads(raw)
+    ta = p.get("technical_artifacts") or {}
+    if ta.get("page_fingerprints") is None and not ta.get("domain_and_cert_metadata"):
+        return hashlib.sha256(raw).hexdigest()[:16]
+    ta.pop("page_fingerprints", None)
+    ta["domain_and_cert_metadata"] = []
+    return hashlib.sha256(json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")).hexdigest()[:16]
 
 
 def _errors_by_variant(errors: List[str]) -> Dict[str, List[str]]:

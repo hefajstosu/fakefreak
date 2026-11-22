@@ -2,15 +2,17 @@
 
 Evidence labels come from `sim_functions.evidence.strong_links`. Two levels:
 - campaign (must-link): a shared tracker ID or the same sponsoring page identify one operator's account;
-- family: shared platform endpoint paths identify a shared landing-page tool, which several operators can use. They
-  put two cases of the same scam type into one family of campaigns, not into one campaign. (On the sample data this
+- family: shared platform endpoint paths identify a shared landing-page tool, and two or more identical page images a
+  shared page kit; several operators can use either. They put two cases of the same scam type into one family of
+  campaigns, not into one campaign (on the samples a kit links pages that gold labels as different campaigns of one
+  scheme). (On the sample data this
   is what gold says: {1, 2} and {48, 61} are two campaigns of one scheme that share the tool.)
 Shared domains and files are neither (a shared mass domain would chain unrelated campaigns); they stay supporting.
 """
 from typing import Any, Dict, Iterable
 
 DEFAULT_MUST_LINK = ("shared tracker ID", "same sponsoring page")
-FAMILY_LINK = ("shared session/form endpoint",)
+FAMILY_LINK = ("shared session/form endpoint", "shared page images")
 # A pair this similar is the same ad again (a variant or a re-post with swapped surface details): it joins like hard
 # evidence. Same value as decision.CONFIRM_SCORE, so a "confirmed" verdict always means the article joined that
 # campaign. No pair of different sample campaigns comes near it (the highest sample pair scores 0.65).

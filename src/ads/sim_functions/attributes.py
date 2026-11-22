@@ -204,6 +204,18 @@ def ad_library_page_name(a, b) -> Score:
     return name_similarity(a, b)
 
 
+# ---------------------------------------------------------------- page fingerprints (preprocess/page_fp.py)
+
+def page_structure(a, b) -> Score:
+    """Best estimated Jaccard similarity between any page of one case and any page of the other, from MinHash
+    sketches of tag paths and CSS class tokens: one landing-page template keeps its skeleton when every word changes.
+    None when either side has no page (ad only, page not captured)."""
+    sa, sb = (a or {}).get("structure") or [], (b or {}).get("structure") or []
+    if not sa or not sb:
+        return None
+    return max(sum(x == y for x, y in zip(u, v)) / max(len(u), 1) for u in sa for v in sb)
+
+
 # ---------------------------------------------------------------- non-grouping (diagnostics only)
 
 def demographics_similarity(a, b) -> Score:

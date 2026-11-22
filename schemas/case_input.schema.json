@@ -10,6 +10,15 @@
     "path": {"type": "string", "minLength": 1, "pattern": "^[^\\\\]+$"},
     "pathArray": {"type": "array", "items": {"$ref": "#/definitions/path"}},
     "strArray": {"type": "array", "items": {"type": "string"}},
+    "pageFingerprints": {
+      "type": "object", "additionalProperties": false,
+      "description": "Written by code (src/ads/preprocess/page_fp.py), never by the model: MinHash sketches of each page's tag paths and CSS classes, and content hashes of the large page images. Optional.",
+      "required": ["structure", "images"],
+      "properties": {
+        "structure": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0}}},
+        "images": {"$ref": "#/definitions/strArray"}
+      }
+    },
     "role": {"enum": ["politician", "journalist", "news_anchor", "athlete", "celebrity", "doctor",
       "lawyer", "economist_or_financier", "business_leader", "public_official", "religious_figure",
       "unidentified_speaker", "other"]},
@@ -99,7 +108,8 @@
         "redirect_chain": {"$ref": "#/definitions/strArray"},
         "tracker_ids": {"$ref": "#/definitions/strArray"},
         "dom_and_form_clues": {"$ref": "#/definitions/strArray"},
-        "domain_and_cert_metadata": {"$ref": "#/definitions/strArray"}
+        "domain_and_cert_metadata": {"$ref": "#/definitions/strArray"},
+        "page_fingerprints": {"$ref": "#/definitions/pageFingerprints"}
       }
     },
     "resolved_identities": {

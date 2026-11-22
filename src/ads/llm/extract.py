@@ -25,6 +25,9 @@ ORDER = ["ad_creative", "bridge_page", "offer_page", "decoy_page"]
 PAGE_CHARS = 6000  # per page part; longer pages keep their beginning and are marked with [...]
 TECH_KEYS = ["urls_and_domains", "redirect_chain", "tracker_ids", "dom_and_form_clues",
              "domain_and_cert_metadata"]
+# Optional technical fields that code computes and copies, and the model never sees (they are numbers and hashes,
+# useless to it; leaving them out keeps the prompt, and so the LLM cache key, identical to before they existed).
+CODE_ONLY_TECH_KEYS = ["page_fingerprints"]
 
 
 def build_parts(case: Dict[str, Any]) -> List[Part]:
@@ -38,7 +41,8 @@ def build_parts(case: Dict[str, Any]) -> List[Part]:
                 parts.append(("text", "[VIDEO_TRANSCRIPT]\n" + p["transcript"]))
             for img in p.get("images", []):
                 parts.append(("image", os.path.join(DATA, img)))
-    parts.append(("text", "[TECHNICAL_SUMMARY]\n" + json.dumps(case["technical_summary"], ensure_ascii=False)))
+    summary = {k: v for k, v in case["technical_summary"].items() if k not in CODE_ONLY_TECH_KEYS}
+    parts.append(("text", "[TECHNICAL_SUMMARY]\n" + json.dumps(summary, ensure_ascii=False)))
     parts.append(("text", "[RESOLVED_IDENTITIES]\n" + json.dumps(case["resolved_identities"], ensure_ascii=False)))
     return parts
 
@@ -53,6 +57,9 @@ def enforce_technical(profile: Dict[str, Any], case: Dict[str, Any]) -> None:
     ta = profile.setdefault("technical_artifacts", {})
     for k in TECH_KEYS:
         ta[k] = case["technical_summary"][k]
+    for k in CODE_ONLY_TECH_KEYS:
+        if k in case["technical_summary"]:
+            ta[k] = case["technical_summary"][k]
     ta.setdefault("ad_library_metadata", {"page_id_or_name": None, "payer_name": None, "dates_active": None})
 
 

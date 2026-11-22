@@ -27,6 +27,7 @@ from urllib.parse import urljoin, urlsplit
 import requests
 
 from . import har as harmod
+from . import page_fp
 from .assemble import html_str_to_text
 
 UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -37,6 +38,8 @@ MAX_BYTES = 3_000_000
 MAX_HOPS = 8
 TIMEOUT = 15
 
+IMG = re.compile(r'<img[^>]+?src=["\']([^"\'>\s]+)', re.I)
+MAX_IMAGES = 10
 META_REFRESH = re.compile(r'<meta[^>]+http-equiv=["\']?refresh["\']?[^>]*content=["\']?\s*\d+\s*;\s*url=([^"\'>\s]+)', re.I)
 JS_REDIRECT = re.compile(r'(?:window\.|document\.|top\.)?location(?:\.href|\.replace\()?\s*[=(]\s*["\']((?:https?:)?//[^"\']+)["\']', re.I)
 TRACKERS = [
@@ -148,6 +151,27 @@ def extract_first_party_files(html: str, base_url: str) -> List[str]:
     return out
 
 
+def first_party_image_urls(html: str, base_url: str) -> List[str]:
+    base = harmod.reg_domain(urlsplit(base_url).hostname or "")
+    urls: List[str] = []
+    for src in IMG.findall(html):
+        u = urljoin(base_url, src)
+        h = urlsplit(u).hostname or ""
+        if harmod.reg_domain(h) == base and not harmod.is_mass(h) and u not in urls and not u.lower().endswith(".svg"):
+            urls.append(u)
+    return urls[:MAX_IMAGES]
+
+
+def _read_bytes(resp: requests.Response, limit: int) -> bytes:
+    chunks, size = [], 0
+    for chunk in resp.iter_content(65536):
+        chunks.append(chunk)
+        size += len(chunk)
+        if size >= limit:
+            break
+    return b"".join(chunks)
+
+
 def _read(resp: requests.Response, limit: int = MAX_BYTES) -> str:
     chunks, size = [], 0
     for chunk in resp.iter_content(65536):
@@ -213,12 +237,24 @@ def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
         except requests.RequestException:
             notes.append(f"could not fetch script {su.rsplit('/', 1)[-1][:40]}")
     found = analyze(html, cur, scripts)
+    images: List[bytes] = []
+    for iu in first_party_image_urls(html, cur):  # the page's own image kit, same safety rules
+        if _blocked(iu, allow_private):
+            continue
+        try:
+            ri = session.get(iu, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
+            if ri.status_code == 200:
+                images.append(_read_bytes(ri, MAX_BYTES))
+        except requests.RequestException:
+            pass
+    sketch = page_fp.structure_sketch(html)
     tech = {
         "urls_and_domains": [harmod.sanitize_url(cur)],
         "redirect_chain": pub_chain,
         "tracker_ids": found["tracker_ids"],
         "dom_and_form_clues": found["dom_and_form_clues"],
         "domain_and_cert_metadata": [],
+        "page_fingerprints": {"structure": [sketch] if sketch else [], "images": page_fp.image_hashes(images)},
     }
     return {"ok": True, "final_url": cur, "status": status, "title": re.sub(r"\s+", " ", title.group(1)).strip() if title else None,
             "text": text, "technical_summary": tech, "notes": notes}
