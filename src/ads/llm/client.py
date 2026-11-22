@@ -16,19 +16,21 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+from ..paths import CACHE, CONFIG, REPO
+
 Part = Tuple[str, str]  # ("text", content), ("image", path) or ("audio", path)
 AUDIO_MIME = {".mp3": "audio/mp3", ".ogg": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".aac": "audio/aac"}
 
 
 def load_env(path: Optional[str] = None) -> None:
     from dotenv import load_dotenv
-    load_dotenv(path or os.path.join(REPO_ROOT, ".env"))
+    load_dotenv(path or os.path.join(REPO, ".env"))
 
 
-def load_config() -> Dict[str, Any]:
+def load_llm_config() -> Dict[str, Any]:
+    """config/llm.yaml (models, fallback models, cache directory, variant settings)."""
     import yaml
-    with open(os.path.join(REPO_ROOT, "config", "llm.yaml"), encoding="utf-8") as f:
+    with open(os.path.join(CONFIG, "llm.yaml"), encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -70,7 +72,7 @@ def with_fallback(models: List[str], fn: Callable[[str], str]) -> str:
 class LLMClient:
     def __init__(self, model: str, cache_dir: str, max_retries: int = 2, temperature: float = 0.0, json_mode: bool = True):
         self.model, self.max_retries, self.temperature, self.json_mode = model, max_retries, temperature, json_mode
-        self.cache_dir = cache_dir if os.path.isabs(cache_dir) else os.path.join(REPO_ROOT, cache_dir)
+        self.cache_dir = cache_dir if os.path.isabs(cache_dir) else os.path.join(REPO, cache_dir)
         os.makedirs(self.cache_dir, exist_ok=True)
 
     # -- to implement per provider -------------------------------------------------
@@ -99,7 +101,7 @@ class LLMClient:
                 if use_cache:
                     open(path, "w", encoding="utf-8").write(text)
                 return text
-            except QuotaExhausted as e:  # every model is out of quota: fail fast, with a clear message
+            except QuotaExhausted:  # every model is out of quota: fail fast, with a clear message
                 raise
             except Exception as e:  # rate limit / transient server error -> back off and retry
                 last = e
@@ -170,7 +172,7 @@ class GeminiClient(LLMClient):
 class MockClient(LLMClient):
     """Returns canned JSON; used in tests so nothing hits the network."""
     def __init__(self, responses: List[str]):
-        super().__init__("mock", os.path.join(REPO_ROOT, ".cache", "mock"))
+        super().__init__("mock", os.path.join(CACHE, "mock"))
         self.responses, self.calls = list(responses), []
 
     def generate_text(self, system, parts, use_cache=True):
@@ -180,7 +182,7 @@ class MockClient(LLMClient):
 
 def make_client(model_key: str = "extraction_model", json_mode: bool = True, **overrides) -> LLMClient:
     load_env()
-    cfg = {**load_config(), **overrides}
+    cfg = {**load_llm_config(), **overrides}
     provider = cfg.get("provider", "gemini")
     if provider == "gemini":
         explicit = bool(overrides.get(model_key))  # an explicitly chosen model is used as is, without failover

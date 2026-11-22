@@ -12,10 +12,10 @@ import os
 from functools import lru_cache
 from typing import Optional
 
+from ..paths import CONFIG
 from .aggregate import ANCHOR_WEIGHTS, DEFAULT_WEIGHTS
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-DEFAULT_PATH = os.path.join(REPO, "config", "cluster.yaml")
+DEFAULT_PATH = os.path.join(CONFIG, "cluster.yaml")
 
 
 def _build(raw: dict, path: str) -> dict:

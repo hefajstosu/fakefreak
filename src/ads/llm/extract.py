@@ -14,11 +14,11 @@ from typing import Any, Dict, List
 
 from jsonschema import Draft7Validator
 
-from .client import REPO_ROOT, LLMClient, Part, make_client
+from ..paths import DATA, PROMPTS, SCHEMAS
+from .client import LLMClient, Part, make_client
 
-PROMPT_PATH = os.path.join(REPO_ROOT, "prompts", "extraction.txt")
-SCHEMA_PATH = os.path.join(REPO_ROOT, "schemas", "profile.schema.json")
-DATA_DIR = os.path.join(REPO_ROOT, "data")
+PROMPT_PATH = os.path.join(PROMPTS, "extraction.txt")
+SCHEMA_PATH = os.path.join(SCHEMAS, "profile.schema.json")
 LABEL = {"ad_creative": "[AD_CREATIVE]", "bridge_page": "[BRIDGE_PAGE]",
          "offer_page": "[OFFER_PAGE]", "decoy_page": "[DECOY_PAGE]"}
 ORDER = ["ad_creative", "bridge_page", "offer_page", "decoy_page"]
@@ -37,13 +37,13 @@ def build_parts(case: Dict[str, Any]) -> List[Part]:
             if p.get("transcript"):
                 parts.append(("text", "[VIDEO_TRANSCRIPT]\n" + p["transcript"]))
             for img in p.get("images", []):
-                parts.append(("image", os.path.join(DATA_DIR, img)))
+                parts.append(("image", os.path.join(DATA, img)))
     parts.append(("text", "[TECHNICAL_SUMMARY]\n" + json.dumps(case["technical_summary"], ensure_ascii=False)))
     parts.append(("text", "[RESOLVED_IDENTITIES]\n" + json.dumps(case["resolved_identities"], ensure_ascii=False)))
     return parts
 
 
-def validate(profile: Dict[str, Any]) -> List[str]:
+def schema_errors(profile: Dict[str, Any]) -> List[str]:
     v = Draft7Validator(json.load(open(SCHEMA_PATH, encoding="utf-8")))
     return [f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message[:200]}" for e in v.iter_errors(profile)]
 
@@ -98,14 +98,14 @@ def extract(case: Dict[str, Any], client: LLMClient, use_cache: bool = True) -> 
     parts = build_parts(case)
     profile = _generate(client, system, parts, use_cache)
     finalize(profile, case)
-    errors = validate(profile)
+    errors = schema_errors(profile)
     if errors:  # one repair attempt, showing the model its own errors
         repair = parts + [("text", "Your previous JSON was invalid:\n" + "\n".join(errors[:15]) +
                            "\nPrevious JSON:\n" + json.dumps(profile, ensure_ascii=False) +
                            "\nReturn the corrected full JSON profile only.")]
         profile = _generate(client, system, repair, use_cache)
         finalize(profile, case)
-        errors = validate(profile)
+        errors = schema_errors(profile)
     if errors:
         raise ValueError("profile still invalid after repair:\n" + "\n".join(errors[:15]))
     return profile

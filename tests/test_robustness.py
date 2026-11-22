@@ -1,5 +1,4 @@
 """Tests for channel masks and the ablation metrics. Synthetic data only."""
-import copy
 import os
 import sys
 

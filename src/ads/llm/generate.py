@@ -20,11 +20,11 @@ from typing import Any, Dict, List
 from jsonschema import Draft7Validator
 
 from .. import validate as vmod
-from .client import REPO_ROOT, make_client, load_config
+from ..paths import CASES, PROMPTS, SCHEMAS
+from .client import load_llm_config, make_client
 
-PROMPT = os.path.join(REPO_ROOT, "prompts", "alternatives.txt")
-SCHEMA = os.path.join(REPO_ROOT, "schemas", "variant.schema.json")
-CASES = os.path.join(REPO_ROOT, "data", "cases")
+PROMPT = os.path.join(PROMPTS, "alternatives.txt")
+SCHEMA = os.path.join(SCHEMAS, "variant.schema.json")
 
 
 def variant_to_profile(parent: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, Any]:
@@ -112,7 +112,7 @@ def generate(case_id: str, n: int, k: int, model: str, allowed_slots=None, pools
 
 
 def main() -> None:
-    cfg = load_config()
+    cfg = load_llm_config()
     ap = argparse.ArgumentParser()
     ap.add_argument("cases", nargs="*")
     ap.add_argument("--all", action="store_true")

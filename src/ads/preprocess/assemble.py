@@ -31,12 +31,10 @@ from typing import Any, Dict, List
 
 from jsonschema import Draft7Validator
 
+from ..paths import CASES, DATA, SCHEMAS
 from . import har as harmod
 from . import video as videomod
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-DATA = os.path.join(REPO, "data")
-CASES = os.path.join(DATA, "cases")
 MAX_TEXT = 40000
 # Long phone-country picklists in sign-up widgets ("Afghanistan +93 Albania +355 ...") are noise.
 PICKLIST = re.compile(r"(?:[A-ZÅÇ][^\s+]*(?: [^\s+]+){0,3} \+\d{1,4}\s+){8,}")
@@ -107,7 +105,7 @@ def assemble(case_id: str) -> Dict[str, Any]:
         harmod.process(os.path.join(DATA, h), tech)
     case = {"schema_version": "1.0", "case_id": m["case_id"], "parts": parts,
             "technical_summary": tech, "resolved_identities": m.get("identities", [])}
-    schema = json.load(open(os.path.join(REPO, "schemas", "case_input.schema.json"), encoding="utf-8"))
+    schema = json.load(open(os.path.join(SCHEMAS, "case_input.schema.json"), encoding="utf-8"))
     errs = [f"{'/'.join(map(str, e.absolute_path))}: {e.message[:150]}" for e in Draft7Validator(schema).iter_errors(case)]
     if errs:
         raise ValueError(f"case {case_id} invalid: " + "; ".join(errs[:5]))

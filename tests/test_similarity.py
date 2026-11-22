@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ads import cluster as clu  # noqa: E402
+from ads import clustering as clu  # noqa: E402
 from ads.similarity import score  # noqa: E402
 from test_extract import profile  # noqa: E402
 

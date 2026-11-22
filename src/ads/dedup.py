@@ -20,9 +20,9 @@ from typing import Any, Dict, List
 import numpy as np
 from PIL import Image
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DATA = os.path.join(REPO, "data")
-CACHE = os.path.join(REPO, ".cache", "fingerprints.json")
+from .paths import CACHE as CACHE_DIR, CASES, DATA
+
+CACHE = os.path.join(CACHE_DIR, "fingerprints.json")
 IMAGE_MAX_DISTANCE = 6      # of 64 bits
 TEXT_NEAR_DUP = 0.90
 SKETCH_K = 256
@@ -117,7 +117,7 @@ def find_duplicates(fp: Dict[str, Any], others: Dict[str, Dict[str, Any]]) -> Li
 
 def load_fingerprints(cases_dir: str = None) -> Dict[str, Dict[str, Any]]:
     """Fingerprints of all cases that have a case_input.json (cached on disk, keyed by file mtime)."""
-    cases_dir = cases_dir or os.path.join(DATA, "cases")
+    cases_dir = cases_dir or CASES
     cache: Dict[str, Any] = {}
     if os.path.exists(CACHE):
         try:

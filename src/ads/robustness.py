@@ -21,8 +21,9 @@ import os
 import sys
 from typing import Callable, Dict, List
 
-from .cluster import pair_scores
-from .evaluate import REPO, gold_pairs, load_profiles
+from .clustering import pair_scores
+from .evaluate import gold_pairs, load_profiles
+from .paths import CASES, gold_file
 from .similarity import score
 
 STRICT = {"same_campaign", "same_template"}
@@ -117,7 +118,7 @@ def channel_ablation(profiles, gold, tau):
 # ---------------------------------------------------------------- degradation of one test case
 
 def load_real_degraded(cid: str, scenario: str):
-    f = os.path.join(REPO, "data", "cases", cid, f"degraded_{scenario}.json")
+    f = os.path.join(CASES, cid, f"degraded_{scenario}.json")
     return json.load(open(f, encoding="utf-8")) if os.path.exists(f) else None
 
 
@@ -160,7 +161,7 @@ def make_degraded(model: str, cases: List[str] = None) -> None:
     """Re-extract reduced inputs through the LLM (one call per case and scenario)."""
     from .llm.client import make_client
     from .llm.extract import extract
-    cases_dir = os.path.join(REPO, "data", "cases")
+    cases_dir = CASES
     client = make_client(extraction_model=model)
     for cid in cases or sorted(os.listdir(cases_dir)):
         f = os.path.join(cases_dir, cid, "case_input.json")
@@ -192,12 +193,10 @@ def main() -> None:
     ap.add_argument("cmd", choices=["channels", "degrade", "make-degraded"])
     ap.add_argument("--tau", type=float, default=0.55)
     ap.add_argument("--model", default="gemini-3.5-flash-lite")
-    ap.add_argument("--gold", default=os.path.join(REPO, "data", "gold", "groups.local.json"))
+    ap.add_argument("--gold", default=gold_file(), help="gold labels (default: the local detailed file if present)")
     a = ap.parse_args()
     if a.cmd == "make-degraded":
         return make_degraded(a.model)
-    if not os.path.exists(a.gold):
-        a.gold = os.path.join(REPO, "data", "gold", "groups.json")
     profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
     if a.cmd == "channels":
         print(f"channel ablation at tau={a.tau} (cases: {len(profiles)})\n")

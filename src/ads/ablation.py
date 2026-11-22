@@ -14,13 +14,12 @@ demographics-invariance check (variants that changed only non-grouping traits mu
 against the parent).
 """
 import argparse
-import glob
 import json
-import os
 import sys
-from typing import Dict, List
+from typing import Dict
 
-from .evaluate import REPO, gold_pairs, load_profiles
+from .evaluate import gold_pairs, load_profiles
+from .paths import gold_file
 from .clustering.pairs import best_score
 from .clustering.variants import load_variants
 from .similarity import score
@@ -66,10 +65,8 @@ def main() -> None:
     ap.add_argument("--taus", default="0.5,0.6,0.7")
     ap.add_argument("--gate", type=float, default=None,
                     help="variant gate: skip variant comparisons for pairs scoring below this without hard evidence")
-    ap.add_argument("--gold", default=os.path.join(REPO, "data", "gold", "groups.local.json"))
+    ap.add_argument("--gold", default=gold_file(), help="gold labels (default: the local detailed file if present)")
     a = ap.parse_args()
-    if not os.path.exists(a.gold):
-        a.gold = os.path.join(REPO, "data", "gold", "groups.json")
     taus = [float(t) for t in a.taus.split(",")]
     profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
     profiles = {k: v for k, v in profiles.items() if k in set(gold.get("case_ids") or profiles)}

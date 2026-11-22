@@ -19,7 +19,7 @@ from ads import clustering as clu  # noqa: E402
 from ads import decision as dec  # noqa: E402
 from ads import dedup  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
-from ads.similarity import score  # noqa: E402
+from ads.paths import CASES, gold_file  # noqa: E402
 
 MODELS = ["auto (tries several models)", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3-flash-preview",
           "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.7-flash"]
@@ -109,7 +109,7 @@ def render_neighbours(res, decision, db, tau, dups=None):
 def save_case(case, profile, decision=None):
     """Persist a scanned case as data/cases/web_<n>/ so it joins the database (gitignored directory)."""
     import shutil
-    base = os.path.join(ev.REPO, "data", "cases")
+    base = CASES
     n = 1
     while os.path.exists(os.path.join(base, f"web_{n}")):
         n += 1
@@ -278,7 +278,7 @@ with tab2:
         st.subheader("Unconfirmed campaigns awaiting an analyst")
         pick = st.selectbox("Case", unconfirmed, format_func=lambda c: label(c, db[c]), key="confirm_pick")
         if st.button("Confirm this campaign"):
-            f = os.path.join(ev.REPO, "data", "cases", pick, "meta.json")
+            f = os.path.join(CASES, pick, "meta.json")
             m = ev.case_meta(pick)
             m["status"] = "confirmed"
             json.dump(m, open(f, "w", encoding="utf-8"))
@@ -298,8 +298,7 @@ with tab2:
     st.caption("Node colour = scam type: " + ", ".join(f"{k}" for k in COLORS))
 
 with tab3:
-    gold_path = next((p for p in (os.path.join(ev.REPO, "data", "gold", "groups.local.json"),
-                                  os.path.join(ev.REPO, "data", "gold", "groups.json")) if os.path.exists(p)), None)
+    gold_path = gold_file() if os.path.exists(gold_file()) else None
     if not gold_path:
         st.info("No gold labels found in data/gold/.")
     else:

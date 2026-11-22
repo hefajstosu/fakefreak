@@ -4,8 +4,7 @@ import os
 from typing import Dict, List
 
 from ..llm.generate import profile_sha, variant_to_profile
-
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+from ..paths import CASES
 
 
 def load_variants(profiles: Dict[str, dict], name: str = "variants.json") -> Dict[str, List[dict]]:
@@ -15,7 +14,7 @@ def load_variants(profiles: Dict[str, dict], name: str = "variants.json") -> Dic
     """
     out: Dict[str, List[dict]] = {}
     for cid, parent in profiles.items():
-        f = os.path.join(REPO, "data", "cases", cid, name)
+        f = os.path.join(CASES, cid, name)
         if os.path.exists(f):
             data = json.load(open(f, encoding="utf-8"))
             if data.get("parent_profile_sha") not in (None, profile_sha(cid)):

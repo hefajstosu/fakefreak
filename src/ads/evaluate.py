@@ -15,13 +15,12 @@ from itertools import combinations
 from typing import Dict, Set
 
 from .clustering import cluster, load_variants, pair_scores
-
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+from .paths import CASES, gold_file
 
 
 def case_meta(cid: str, cases_dir: str = None) -> dict:
     """Optional data/cases/<id>/meta.json written by the demo: {"status": "unconfirmed"|"confirmed", "duplicate_of": id}."""
-    f = os.path.join(cases_dir or os.path.join(REPO, "data", "cases"), cid, "meta.json")
+    f = os.path.join(cases_dir or CASES, cid, "meta.json")
     try:
         return json.load(open(f, encoding="utf-8")) if os.path.exists(f) else {}
     except ValueError:
@@ -29,7 +28,7 @@ def case_meta(cid: str, cases_dir: str = None) -> dict:
 
 
 def load_profiles(cases_dir: str = None) -> Dict[str, dict]:
-    cases_dir = cases_dir or os.path.join(REPO, "data", "cases")
+    cases_dir = cases_dir or CASES
     out = {}
     for f in glob.glob(os.path.join(cases_dir, "*", "profile.json")):
         cid = os.path.basename(os.path.dirname(f))
@@ -78,14 +77,12 @@ def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None, var
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tau", type=float, default=0.6)
-    ap.add_argument("--gold", default=os.path.join(REPO, "data", "gold", "groups.local.json"))
+    ap.add_argument("--gold", default=gold_file(), help="gold labels (default: the local detailed file if present)")
     ap.add_argument("--matrix", action="store_true")
     ap.add_argument("--variants", action="store_true",
                     help="use the synthetic variants (data/cases/*/variants.json) as extra comparisons; they are never grouped")
     ap.add_argument("--gate", type=float, default=None, help="variant gate (see clustering/pairs.py); needs --variants")
     a = ap.parse_args()
-    if not os.path.exists(a.gold):
-        a.gold = os.path.join(REPO, "data", "gold", "groups.json")
     profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
     variants = load_variants(profiles) if a.variants else None
     stats = {}
