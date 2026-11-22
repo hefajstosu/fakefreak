@@ -49,7 +49,7 @@ const ENUM_FEATURES = new Set(["scam_type", "topic", "ad_creative_template", "la
 const $ = (id) => document.getElementById(id);
 const f2 = (x) => (x == null ? "–" : Number(x).toFixed(2));
 const pretty = (v) => (v == null ? "–" : SCAM[v] || String(v).replaceAll("_", " "));
-const evText = (e) => `${EVIDENCE[e.kind] || e.kind}: ${e.value}`;
+const evText = (e) => `${EVIDENCE[e.kind] || e.kind}: ${String(e.value).replace(/ identical image files$/, " identycznych plików")}`;
 const RAW_EVIDENCE = [["shared tracker ID", "tracker"], ["shared session/form endpoint", "endpoint"], ["shared page images", "images"],
   ["same ad campaign ID", "adid"], ["same tracking template", "tracking"], ["domains on one certificate", "certificate"],
   ["shared distinctive script/style file", "file"], ["shared domain", "domain"], ["same sponsoring page", "page"]];
