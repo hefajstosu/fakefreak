@@ -106,7 +106,7 @@ class LLMClient:
             except Exception as e:  # rate limit / transient server error -> back off and retry
                 last = e
                 msg = str(e)
-                transient = any(c in msg for c in ("429", "500", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE"))
+                transient = any(c in msg for c in ("429", "500", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "timed out", "Timeout"))
                 if not transient or attempt == self.max_retries:
                     break
                 m = re.search(r"retry in ([\d.]+)s", msg, re.I)
@@ -144,7 +144,8 @@ class GeminiClient(LLMClient):
         key = os.environ.get(api_key_env)
         if not key:
             raise RuntimeError(f"{api_key_env} is not set (put it in .env)")
-        self._genai, self._client = genai, genai.Client(api_key=key)
+        # Without a timeout one stalled connection can hang a request forever; a timeout is retried like a 503.
+        self._genai, self._client = genai, genai.Client(api_key=key, http_options=genai.types.HttpOptions(timeout=90_000))
 
     def _call(self, system: str, parts: List[Part]) -> str:
         return with_fallback(self.models, lambda m: self._call_model(m, system, parts))

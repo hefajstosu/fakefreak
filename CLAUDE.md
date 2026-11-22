@@ -34,7 +34,7 @@ src/ads/decision.py           graded decision: duplicate / same_content / confir
 src/ads/robustness.py         channel ablation + missing-data tests
 src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
 src/ads/app.py                Streamlit demo
-src/ads/panel.py              simple analyst panel (URL -> decision, campaign browser); logic in analyze.py (no UI, tested)
+src/ads/web/                  web panel: server.py (stdlib JSON API on 127.0.0.1) + static/ page; logic in analyze.py (no UI, tested)
 config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
 data/gold/groups.json         PUBLIC label-only gold; groups.local.json has the detailed notes (gitignored)
 tests/                        synthetic-data tests only (no network, no sample data)
