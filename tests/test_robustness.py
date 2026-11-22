@@ -31,8 +31,10 @@ def test_each_mask_removes_only_its_own_group():
 def test_masking_infrastructure_removes_the_strong_link():
     a = make(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor", tracker="meta_pixel:1")
     b = make(tracker="meta_pixel:1")
-    assert score(a, b)["score"] >= 0.9
-    assert score(rb.mask_profile(a, [INFRA]), rb.mask_profile(b, [INFRA]))["score"] < 0.5
+    r = score(a, b)
+    assert r["strong_links"] and r["score"] > 0.5
+    masked = score(rb.mask_profile(a, [INFRA]), rb.mask_profile(b, [INFRA]))
+    assert not masked["strong_links"] and masked["score"] < r["score"]
 
 
 def test_auc_counts_ties_as_half():

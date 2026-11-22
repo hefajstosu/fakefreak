@@ -1,6 +1,7 @@
 # CLAUDE.md: guide for Claude Code sessions in this repo
 
 > **Working on the similarity? Read `docs/SIMILARITY_BRIEF.md` first** (contract, baseline numbers, commands, hypotheses, guardrails).
+> Similarity logic lives in `src/ads/sim_functions/`, grouping logic in `src/ads/clustering/`; `similarity.py` and `cluster.py` are thin wrappers.
 
 ## What this project is
 HackNation 2026 task "Kolekcjoner fejków / Follow the Fake" (NASK). Scam ads come as **cases** (ad screenshot or video,
@@ -20,8 +21,14 @@ src/ads/preprocess/           assemble.py (manifest -> case_input), har.py (HAR 
                               transcribe.py (audio -> transcript via LLM), url_scan.py (live URL -> text + traces), faces.py (DeepFace, optional, not installed)
 src/ads/llm/                  client.py (provider-agnostic, disk cache, retries), extract.py, generate.py
 src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
-src/ads/similarity.py         score(a, b): REPLACEABLE similarity (a teammate is improving it)
-src/ads/cluster.py            single-link groups + assign() for new items
+src/ads/similarity.py         score(a, b): thin wrapper, the contract callers use; calls sim_functions (no logic of its own)
+src/ads/sim_functions/        THE similarity (a teammate owns it): attributes.py (per-attribute similarities), primitives.py,
+                              normalize.py, aggregate.py (weights, null-aware weighted mean), compare.py (compare_all,
+                              similarity_vector, compare_to_variants), embeddings.py (optional E5), evidence.py (strong_links)
+src/ads/clustering/           ALL grouping logic: pairs.py (N x N pair scores, variants), evidence.py (must-link rules),
+                              linkage.py (average-link cluster()), families.py (hierarchy(): campaigns -> families),
+                              assign.py (place a new article), variants.py (load_variants)
+src/ads/cluster.py            re-exports assign/cluster/pair_scores from clustering/ for older callers; add no logic here
 src/ads/dedup.py              duplicate detection: image dHash, page-text hash + near-dup sketch, final URL
 src/ads/decision.py           graded decision: duplicate / same_content / confirmed / likely / suggested_family / new_unconfirmed
 src/ads/robustness.py         channel ablation + missing-data tests
@@ -34,7 +41,7 @@ docs/                         METHODOLOGY.md, DEMO.md, CONTRIBUTING.md (track ow
 Dockerfile, .dockerignore     demo image (UNTESTED: no Docker daemon was available); requirements-optional.txt = heavy extras
 ```
 Pipeline: raw sample -> `assemble` -> `case_input.json` -> `extract` -> `profile.json` -> `generate` -> `variants.json`
--> `similarity.score` -> `cluster` -> `evaluate` / demo. Per-case files live in `data/cases/<id>/` (gitignored).
+-> `similarity.score` (sim_functions) -> `clustering` -> `evaluate` / demo. Per-case files live in `data/cases/<id>/` (gitignored).
 
 ## Run (Windows, Python 3.9, run module commands from `src/`)
 ```
@@ -59,7 +66,7 @@ helper scripts in `scripts/` that create them are gitignored; ask the owner for 
    messages. Before every commit run `git diff --cached` and look for such strings. Tests use synthetic data only.
 2. **Secrets:** `.env` is gitignored. Never echo the key or put it in code, logs, commits or screenshots.
 3. **Schemas are contracts.** Changing a field or an enum value needs all three teammates to agree. If you must,
-   update schema + prompt + `similarity.py` + tests together.
+   update schema + prompt + `sim_functions/` + tests together.
 4. **Do not tune weights or edit gold labels to make metrics look better.** Report failing constraints honestly.
    Gold changes need the owner's approval.
 5. **The LLM never identifies people from faces.** Names come from page text/captions or from the (optional) face
@@ -78,6 +85,30 @@ The client fails over across `fallback_models` (config/llm.yaml) when a model is
 (no retries) when all are; an explicit `--model` disables failover. The demo shows a clear message and keeps sample cases working.
 Profiles in `data/cases` come from mixed models, so small differences between them are expected.
 
+## How similarity and grouping work now
+- `score(a, b)` = `sim_functions.compare_all`: weighted, null-aware mean over per-attribute similarities (a feature missing on
+  one side is dropped, not 0). Technical anchors (tracker IDs, redirect domains, DOM/form clues, sponsoring page) are part of
+  the score through their own weights. `strong_links` (from `sim_functions/evidence.py`) is evidence REPORTING only: it never
+  changes the number. `base` equals `score`. A shared tracker therefore no longer lifts a score to 0.9.
+- Grouping (`ads.clustering`) works on the N x N table of `score()` results, not on the per-attribute matrices:
+  1. hard evidence is a must-link (shared tracker ID, >= 2 shared endpoint prefixes, same sponsoring page; shared domains and
+     files are NOT must-links), merged first;
+  2. average-link merging of the rest while the MEAN score between two groups >= tau (single link chained weak bridges);
+  3. `hierarchy()` groups campaigns into families (same scam type, some member pair >= `family_tau`);
+  4. `assign()` joins a new article to a group on hard evidence with a member or mean score >= tau.
+- Synthetic variants are extra comparisons only: pass `variants={case_id: [profiles]}` (from `clustering.load_variants`) and a real
+  article's score becomes the best of score(a, b), a vs each variant of b, each variant of a vs b. A variant is never a node
+  or group member and variants are never compared with each other. `variant_gate` (default off; try 0.15) skips variant
+  comparisons for pairs below it that share no hard evidence. Result key `via_variant` ("a:<i>"/"b:<i>"/None) says where a score
+  came from. Wired into the demo (sidebar checkbox) and `python -m ads.evaluate --variants [--gate 0.15]`; `ablation --gate`
+  reports what the gate would lose. Variant files stay in gitignored `data/cases/*/`.
+- Weights, anchor weights and `ignore_values` come from `config/cluster.yaml` via `sim_functions/config.py` (validated: an unknown
+  weight name or a negative weight raises). Keys missing from the file keep the defaults in `aggregate.py`. `thresholds` in the
+  file are not read by any code yet.
+- Not yet used by `score()`: embeddings (`embeddings.E5Embedder`) and rarity weighting (`anchor_stats`); `compare_all` supports both.
+- Thresholds were written for the old score scale. The top gold pair now scores about 0.67, so the demo slider (0.60) and the 0.80
+  "confirmed" cut-off in `decision.py` probably need recalibrating. `decision.py` and the demo do not use `hierarchy()` yet.
+
 ## Python 3.9 / Windows gotchas
 - No same-type nested quotes in f-strings; no `match`; no `X | Y` type unions.
 - Print non-ASCII with `sys.stdout.reconfigure(encoding="utf-8")`; the default console is cp1250.
@@ -86,10 +117,12 @@ Profiles in `data/cases` come from mixed models, so small differences between th
 - Git prints LF/CRLF warnings; they are harmless.
 
 ## Current status and known issues
-- 10 sample cases extracted; 28 variants (case 14 has only 1). Gold: 7 ranking constraints, 6 pass with the placeholder
-  similarity (the 47/14/5 health group fails because the ad-template feature is too influential).
+- 10 sample cases extracted; 28 variants generated earlier (case 14 has only 1), but `variants.json` files are absent on some machines.
+  Gold: 7 ranking constraints; with `sim_functions` + `clustering` all 7 pass (the 47/14/5 health group failed with the old
+  placeholder). Pairwise at tau 0.6: strict P/R/F1 0.33/0.67/0.44, broad 1.00/0.46/0.63 (average-link needs the must-link rule:
+  without it broad recall is 0.08 at 0.6). The variant gate and variant wiring are not yet measured (no variants locally).
 - Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
-- Findings from `ads.robustness` (placeholder similarity, tau 0.55, 10 gold cases; weights are guesses, so treat as indicative):
+- Findings from `ads.robustness` (measured on the OLD placeholder similarity, NOT re-run on `sim_functions`; tau 0.55, 10 gold cases; weights are guesses, so treat as indicative):
   * Infrastructure and scam type + topic carry the grouping: switching either off drops recall sharply.
   * Switching off text, entities or props/amounts RAISES recall: surface features dilute pairs that share a template or
     infrastructure, although surface elements are exactly what operators swap. A better similarity should use entity overlap
@@ -99,7 +132,7 @@ Profiles in `data/cases` come from mixed models, so small differences between th
     confidence is low, confirm a campaign only with strong evidence. From the ad alone, scam type is unreliable for some
     cases because it depends on where the funnel ends.
   * Caveat: reduced-input extractions used gemini-3.5-flash-lite, baseline profiles come from other models.
-- Entity strings are not normalised yet (`tvn24` vs `TVN24`): normalise in similarity, not in profiles.
+- Entity strings are normalised inside `sim_functions/normalize.py` (case, accents, punctuation), not in the profiles.
 - Live URL scan is done (`url_scan.py`): redirect chain, tracker IDs (also from config blobs and first-party scripts),
   form endpoints, first-party files, and platform endpoint paths (`api:/api/v1/...`) read from up to 3 first-party
   scripts. Blocks private addresses; does NOT run JavaScript, so pixels injected only at runtime are missed.

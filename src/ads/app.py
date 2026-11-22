@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import streamlit as st  # noqa: E402
 
-from ads import cluster as clu  # noqa: E402
+from ads import clustering as clu  # noqa: E402
 from ads import decision as dec  # noqa: E402
 from ads import dedup  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
@@ -37,6 +37,12 @@ st.set_page_config(page_title="Follow the Fake", layout="wide")
 @st.cache_data
 def database():
     return ev.load_profiles()
+
+
+@st.cache_data
+def variant_db():
+    """Synthetic variants of the database cases (extra comparisons only, never listed or grouped)."""
+    return clu.load_variants(ev.load_profiles())
 
 
 def label(cid, p):
@@ -76,7 +82,7 @@ STATUS_BOX = {"duplicate": st.success, "same_content": st.success, "confirmed": 
 
 def compute_decision(profile, db, tau, dups=None):
     """Compare with the database (no rendering): returns (neighbour result, graded decision)."""
-    res = clu.assign(profile, db, tau)
+    res = clu.assign(profile, db, tau, variants=VARIANTS)
     return res, dec.decide(res["neighbours"], dups or [], likely=tau)
 
 
@@ -180,6 +186,12 @@ with st.sidebar:
     model = st.selectbox("LLM for new material", MODELS,
                          help="'auto' tries the configured models in order and skips the ones out of free quota.")
     st.caption(f"{len(db)} cases in the database")
+    _vars = variant_db()
+    use_variants = st.checkbox("Use synthetic variants as extra comparisons", value=bool(_vars), disabled=not _vars,
+                               help="Variants of database cases can raise a score; they are never shown as cases or grouped.")
+    if _vars:
+        st.caption(f"{sum(len(v) for v in _vars.values())} variants for {len(_vars)} cases (local, not in git)")
+    VARIANTS = _vars if use_variants else None
     if KEY_OK:
         st.caption("LLM key: found. New material can be analysed.")
     else:
@@ -256,7 +268,7 @@ with tab1:
             render_neighbours(res, decision, db, tau, dups)
 
 with tab2:
-    scores = clu.pair_scores(db)
+    scores = clu.pair_scores(db, VARIANTS)
     groups = clu.cluster(db, tau, scores)
     st.subheader(f"Groups at threshold {tau:.2f}")
     for g in groups:
@@ -292,7 +304,7 @@ with tab3:
         st.info("No gold labels found in data/gold/.")
     else:
         gold = json.load(open(gold_path, encoding="utf-8"))
-        r = ev.evaluate(db, gold, tau)
+        r = ev.evaluate(db, gold, tau, variants=VARIANTS)
         ok = sum(t[3] for t in r["triples"])
         m1, m2, m3 = st.columns(3)
         m1.metric("Ranking constraints satisfied", f"{ok}/{len(r['triples'])}")
