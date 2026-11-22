@@ -5,7 +5,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ads import robustness as rb  # noqa: E402
+from ads.evaluation import robustness as rb  # noqa: E402
+from ads.evaluation.gold import auc  # noqa: E402
 from ads.similarity import score  # noqa: E402
 from test_similarity import make  # noqa: E402
 
@@ -37,9 +38,9 @@ def test_masking_infrastructure_removes_the_strong_link():
 
 
 def test_auc_counts_ties_as_half():
-    assert rb._auc([0.9, 0.8], [0.1, 0.2]) == 1.0
-    assert rb._auc([0.5], [0.5]) == 0.5
-    assert rb._auc([0.1], [0.9]) == 0.0
+    assert auc([0.9, 0.8], [0.1, 0.2]) == 1.0
+    assert auc([0.5], [0.5]) == 0.5
+    assert auc([0.1], [0.9]) == 0.0
 
 
 def test_metrics_on_a_tiny_synthetic_database():

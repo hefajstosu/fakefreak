@@ -55,35 +55,19 @@ def test_variants_raise_scores_but_are_never_grouped():
     db = {"a": make(), "c": make(**OTHER)}
     variants = {"c": [make()]}          # a variant of c that looks like a
     plain = cl.pair_scores(db)[("a", "c")]
-    with_v = cl.pair_scores(db, variants)[("a", "c")]
-    assert plain["via_variant"] is None and with_v["via_variant"] == "b:0" and with_v["score"] > plain["score"]
-    assert with_v["base"] == plain["base"]
-    groups = cl.cluster(db, 0.6, variants=variants)
-    assert sorted(x for g in groups for x in g) == ["a", "c"]       # only real articles appear
-    res = cl.assign(make(), db, 0.6, variants=variants)
-    assert all(c in db for c, _ in res["neighbours"]) and ["a", "c"] in res["joins"]
+    with_v = cl.pair_scores(db, variants)
+    assert plain["via_variant"] is None and with_v[("a", "c")]["via_variant"] == "b:0"
+    assert with_v[("a", "c")]["score"] > plain["score"]
+    assert sorted(x for g in cl.cluster(db, 0.6, with_v) for x in g) == ["a", "c"]   # only real articles appear
 
 
-def test_gate_skips_variants_of_hopeless_pairs_but_keeps_close_or_evidenced_ones():
-    a, far = make(), make(**OTHER)
-    variants = {"far": [make(), make()]}
-    st = {}
-    r = cl.best_score(a, far, None, variants["far"], variant_gate=0.9, stats=st)      # direct score is below the gate
-    assert r["via_variant"] is None and st == {"variant_comparisons_skipped": 2}
-    st = {}
-    r = cl.best_score(a, far, None, variants["far"], variant_gate=0.1, stats=st)      # passes the gate
-    assert r["via_variant"] == "b:0" and st == {"variant_comparisons": 2}
-    t1, t2 = make(tracker="meta_pixel:1"), make(tracker="meta_pixel:1", **OTHER)
-    st = {}
-    cl.best_score(t1, t2, None, [make()], variant_gate=0.99, stats=st)                # hard evidence bypasses the gate
-    assert st == {"variant_comparisons": 1}
-
-
-def test_variants_are_never_compared_with_each_other():
-    a, b = make(), make(**OTHER)
-    st = {}
-    cl.best_score(a, b, [make(), make()], [make(), make(), make()], stats=st)
-    assert st["variant_comparisons"] == 5           # 2 + 3, not 2 * 3 more
+def test_variants_are_never_compared_with_each_other(monkeypatch):
+    from ads.clustering import pairs
+    calls = []
+    real = pairs.score
+    monkeypatch.setattr(pairs, "score", lambda x, y: calls.append(1) or real(x, y))
+    cl.best_score(make(), make(**OTHER), [make(), make()], [make(), make(), make()])
+    assert len(calls) == 1 + 5          # the real pair, then 2 + 3 variants against the other real article
 
 
 def test_near_identical_content_joins_alone_but_a_weaker_pair_needs_the_mean():
@@ -91,18 +75,6 @@ def test_near_identical_content_joins_alone_but_a_weaker_pair_needs_the_mean():
     s = fake({("a", "b"): 0.85, ("b", "c"): 0.85, ("a", "c"): 0.1})
     assert cl.cluster(ids, 0.6, s) == [["a", "b", "c"]]   # each pair is the same ad again: seeds, not averages
     assert cl.joins_alone({"score": 0.8, "strong_links": []}) and not cl.joins_alone({"score": 0.79, "strong_links": []})
-
-
-def test_quality_report_classifies_joins_misses_and_false_joins():
-    from ads import quality
-    db = {"a": make(), "b": make(product="Other", tracker="meta_pixel:1"), "c": make(**OTHER)}
-    db["a"]["technical_artifacts"]["tracker_ids"] = ["meta_pixel:1"]
-    gold = {"case_ids": ["a", "b", "c"], "groups": [{"level": "same_campaign", "members": ["a", "b"]}]}
-    rows = {r["item"]: r for r in quality.leave_one_out(db, gold, 0.6)}
-    assert rows["a"]["outcome"] == "correct" and rows["c"]["outcome"] == "correct" and rows["c"]["joined"] == []
-    report = quality.run(0.6, db, gold, {"c": [make(**OTHER)]})
-    assert report["variants, parent known, new infrastructure"]["accuracy"] == 1.0
-    assert report["must-not-link (all items that should stay new)"]["stay_new_correct"] == 1.0
 
 
 def test_shared_platform_endpoints_make_a_family_not_a_campaign():

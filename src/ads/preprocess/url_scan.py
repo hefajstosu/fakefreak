@@ -26,8 +26,8 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
-from . import har as harmod
 from . import page_fp
+from ..urls import is_mass, reg_domain, sanitize_url
 from .assemble import html_str_to_text
 
 UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -76,12 +76,12 @@ def extract_api_paths(text: str) -> List[str]:
 
 
 def first_party_script_urls(html: str, base_url: str) -> List[str]:
-    base = harmod.reg_domain(urlsplit(base_url).hostname or "")
+    base = reg_domain(urlsplit(base_url).hostname or "")
     urls: List[str] = []
     for src in ASSET.findall(html):
         u = urljoin(base_url, src)
         h = urlsplit(u).hostname or ""
-        if urlsplit(u).path.endswith(".js") and harmod.reg_domain(h) == base and not harmod.is_mass(h) and u not in urls:
+        if urlsplit(u).path.endswith(".js") and reg_domain(h) == base and not is_mass(h) and u not in urls:
             urls.append(u)
     return urls[:MAX_SCRIPTS]
 
@@ -139,11 +139,11 @@ def extract_forms(html: str, base_url: str) -> List[str]:
 
 
 def extract_first_party_files(html: str, base_url: str) -> List[str]:
-    base = harmod.reg_domain(urlsplit(base_url).hostname or "")
+    base = reg_domain(urlsplit(base_url).hostname or "")
     out: List[str] = []
     for src in ASSET.findall(html):
         u = urlsplit(urljoin(base_url, src))
-        if harmod.reg_domain(u.hostname or "") != base or harmod.is_mass(u.hostname or ""):
+        if reg_domain(u.hostname or "") != base or is_mass(u.hostname or ""):
             continue
         name = u.path.rsplit("/", 1)[-1]
         if name and f"file:{name}" not in out:
@@ -152,12 +152,12 @@ def extract_first_party_files(html: str, base_url: str) -> List[str]:
 
 
 def first_party_image_urls(html: str, base_url: str) -> List[str]:
-    base = harmod.reg_domain(urlsplit(base_url).hostname or "")
+    base = reg_domain(urlsplit(base_url).hostname or "")
     urls: List[str] = []
     for src in IMG.findall(html):
         u = urljoin(base_url, src)
         h = urlsplit(u).hostname or ""
-        if harmod.reg_domain(h) == base and not harmod.is_mass(h) and u not in urls and not u.lower().endswith(".svg"):
+        if reg_domain(h) == base and not is_mass(h) and u not in urls and not u.lower().endswith(".svg"):
             urls.append(u)
     return urls[:MAX_IMAGES]
 
@@ -225,7 +225,7 @@ def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
     if status and status >= 400:
         notes.append(f"HTTP status {status}")
     title = TITLE.search(html)
-    pub_chain = [harmod.sanitize_url(u) for u in chain if not harmod.is_mass(urlsplit(u).hostname or "")]
+    pub_chain = [sanitize_url(u) for u in chain if not is_mass(urlsplit(u).hostname or "")]
     scripts: List[str] = []
     for su in first_party_script_urls(html, cur):  # same safety rules as the page itself
         if _blocked(su, allow_private):
@@ -249,7 +249,7 @@ def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
             pass
     sketch = page_fp.structure_sketch(html)
     tech = {
-        "urls_and_domains": [harmod.sanitize_url(cur)],
+        "urls_and_domains": [sanitize_url(cur)],
         "redirect_chain": pub_chain,
         "tracker_ids": found["tracker_ids"],
         "dom_and_form_clues": found["dom_and_form_clues"],

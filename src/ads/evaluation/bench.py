@@ -1,13 +1,13 @@
 """How the comparison scales with the size of the database (for docs/DEPLOYMENT.md).
 
-    python -m ads.bench [--sizes 100 300 1000]
+    python -m ads.evaluation.bench [--sizes 100 300 1000]
 
 The database is grown from the profiles in data/cases: copy i of a profile gets its own tracker IDs and a distinct
 summary, so copies do not all become one hard-evidence group. Copies repeat strings, so the string caches hit more
 often than on N distinct real articles; the "cold" per-pair time is the honest upper bound for those.
 Measured: one score(), the full N x N table, the clustering, a first analysis of a new article (whole table and
 clustering), another analysis with the database unchanged (campaigns reused) and one after a case was saved (pair
-table reused, clustering redone; see analyze.pair_table and analyze.campaigns).
+table reused, clustering redone; see analysis/index.py).
 """
 import argparse
 import copy
@@ -15,10 +15,9 @@ import sys
 import time
 from typing import Dict
 
-from . import analyze as an
-from . import clustering
-from .evaluate import load_profiles, require_profiles
-from .similarity import score
+from .. import analysis, clustering
+from ..database import load_profiles, require_profiles
+from ..similarity import score
 
 
 def grow(base: Dict[str, dict], n: int) -> Dict[str, dict]:
@@ -66,16 +65,14 @@ def main() -> None:
         new, new2 = db.pop(f"c{n:05d}"), db.pop(f"c{n + 1:05d}")
         scores, t_table = timed(lambda: clustering.pair_scores(db))
         _, t_cluster = timed(lambda: clustering.cluster(db, 0.6, scores))
-        an._PAIRS.clear()
-        an._GROUPS.clear()
-        _, t_first = timed(lambda: an.compare(new, None, db, 0.6, fingerprints={}))
-        _, t_repeat = timed(lambda: an.compare(new2, None, db, 0.6, fingerprints={}))
+        analysis.reset()
+        _, t_first = timed(lambda: analysis.compare(new, None, db, 0.6, fingerprints={}))
+        _, t_repeat = timed(lambda: analysis.compare(new2, None, db, 0.6, fingerprints={}))
         db["new"] = new  # the analyst saved it; the next article is compared with N + 1 cases
-        _, t_saved = timed(lambda: an.compare(new2, None, db, 0.6, fingerprints={}))
+        _, t_saved = timed(lambda: analysis.compare(new2, None, db, 0.6, fingerprints={}))
         print(f"{n:>6} {n * (n - 1) // 2:>9} {t_table:>8.1f} {t_cluster:>9.2f} {t_first:>14.1f} {t_repeat:>9.2f} "
               f"{t_saved:>12.2f} {peak_mb():>8.0f}", flush=True)
-        an._PAIRS.clear()
-        an._GROUPS.clear()
+        analysis.reset()
 
 
 if __name__ == "__main__":

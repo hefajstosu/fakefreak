@@ -1,8 +1,8 @@
 """Grouping quality measured the way the organiser will test it (task, section 6): new material is analysed against
-the database exactly as in the panel (analyze.compare) and its outcome is checked against the gold labels.
+the database exactly as in the panel (analysis.compare) and its outcome is checked against the gold labels.
 
-    python -m ads.quality [--tau 0.6]
-    python -m ads.quality --sweep          # the same tests for tau 0.30 .. 0.80: where joins start, where false joins start
+    python -m ads.evaluation.quality [--tau 0.6] [--json]
+    python -m ads.evaluation.quality --sweep    # the same tests for tau 0.30 .. 0.80
 
 Three tests, each item ending as correct, missed (a known campaign was not joined) or false join (joined a campaign
 it has no gold relation to):
@@ -14,26 +14,24 @@ it has no gold relation to):
                   a campaign of the parent's strict partners, or stay new). Each with the parent's technical traces
                   (same operator) and without them (new infrastructure: content alone must carry the link).
   must-not-link   every item above that should stay new: the share that was wrongly joined to a campaign.
-Variants are synthetic and only ever compared with real cases (never with each other), as in clustering.
+Both levels are judged: campaigns (purity: joined cases that are the same campaign in gold) and families of campaigns
+(against the broad gold). Variants are only ever compared with real cases, never with each other.
 """
 import argparse
 import copy
 import json
-import sys
 from collections import Counter
 from typing import Dict, List, Optional, Set
 
-from . import analyze as an
-from .clustering import load_all_variants
-from .evaluate import gold_pairs, load_profiles, require_profiles
-from .paths import gold_file
-from .robustness import BROAD, STRICT
+from ..analysis import compare
+from ..clustering import load_variants
+from ..database import load_profiles, require_profiles
+from .gold import BROAD, STRICT, gold_pairs, labelled, load_gold, partners
 
-OUTCOMES = ("correct", "missed", "false join")
-
-
-def partners(cid: str, pairs: Set[tuple]) -> Set[str]:
-    return {b if a == cid else a for a, b in pairs if cid in (a, b)}
+SHORT = {"leave-one-out (real cases)": "LOO", "variants, parent known, same infrastructure": "known+same",
+         "variants, parent known, new infrastructure": "known+new", "variants, parent held out, same infrastructure":
+         "held+same", "variants, parent held out, new infrastructure": "held+new"}
+MUST_NOT_LINK = "must-not-link (all items that should stay new)"
 
 
 def strip_infrastructure(p: dict) -> dict:
@@ -44,47 +42,45 @@ def strip_infrastructure(p: dict) -> dict:
     return q
 
 
-def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], related: Set[str],
-            same_campaign: Optional[Set[str]] = None) -> Dict[str, object]:
+def _kind(joined: Set[str], expected: Set[str], related: Set[str]) -> str:
+    if joined - related:
+        return "false join"          # grouped with a case it has no gold relation to
+    if expected:
+        return "correct" if joined & expected else "missed"
+    return "correct"                 # nothing known to join: stayed new (or joined only related cases)
+
+
+def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], related: Set[str]) -> Dict[str, object]:
     """Analyse `profile` against `db` and classify the result. `expected`: cases it should be grouped with (strict
     gold, in db); `related`: cases it may be grouped with without counting as a false join (broad gold)."""
-    res = an.compare(profile, None, db, tau, fingerprints={})
+    res = compare(profile, None, db, tau, fingerprints={})
     joined = {c for g in res["joins"] for c in g}
-    if joined - related:
-        kind = "false join"          # grouped with a case it has no gold relation to
-    elif expected:
-        kind = "correct" if joined & expected else "missed"
-    else:
-        kind = "correct"             # nothing known to join: stayed new (or joined only broadly related cases)
-    strict = expected if same_campaign is None else same_campaign
-    purity = len(joined & strict) / len(joined) if joined else None  # campaign level: same_scheme cases count as wrong
-    # second level: the families it belongs to, judged against the broad gold (campaign, template or scheme)
-    fam = {c for f in res["family_joins"] for c in f}
-    if fam - related:
-        fam_kind = "false join"
-    elif related:
-        fam_kind = "correct" if fam & related else "missed"
-    else:
-        fam_kind = "correct" if not fam else "false join"
-    return {"outcome": kind, "status": res["decision"]["status"], "joined": sorted(joined), "expected": sorted(expected),
-            "purity": purity, "family_outcome": fam_kind, "family": sorted(fam), "related": sorted(related)}
+    family = {c for f in res["family_joins"] for c in f}
+    return {"outcome": _kind(joined, expected, related), "family_outcome": _kind(family, related, related),
+            "purity": len(joined & expected) / len(joined) if joined else None,  # same scheme counts as wrong here
+            "status": res["decision"]["status"], "joined": sorted(joined), "expected": sorted(expected)}
+
+
+def _share(rows: List[dict], kind: str) -> float:
+    return sum(r["outcome"] == kind for r in rows) / len(rows) if rows else float("nan")
+
+
+def _mean(xs: List[float]) -> float:
+    return sum(xs) / len(xs) if xs else float("nan")
 
 
 def summarise(rows: List[dict]) -> Dict[str, object]:
-    n = len(rows)
+    n = len(rows) or 1
     count = Counter(r["outcome"] for r in rows)
     should_join = [r for r in rows if r["expected"]]
     should_stay = [r for r in rows if not r["expected"]]
     return {
-        "n": n, "accuracy": count["correct"] / n if n else float("nan"),
-        "join_recall": sum(r["outcome"] == "correct" for r in should_join) / len(should_join) if should_join else float("nan"),
-        "false_join_rate": count["false join"] / n if n else float("nan"),
-        "stay_new_correct": sum(r["outcome"] == "correct" for r in should_stay) / len(should_stay) if should_stay else float("nan"),
-        "family_accuracy": sum(r["family_outcome"] == "correct" for r in rows) / n if n else float("nan"),
-        "family_false_join_rate": sum(r["family_outcome"] == "false join" for r in rows) / n if n else float("nan"),
-        "purity": (sum(r["purity"] for r in rows if r["purity"] is not None) /
-                   max(1, sum(r["purity"] is not None for r in rows))),
-        "n_should_join": len(should_join), "n_should_stay": len(should_stay), "outcomes": dict(count),
+        "n": len(rows), "accuracy": count["correct"] / n, "false_join_rate": count["false join"] / n,
+        "join_recall": _share(should_join, "correct"), "stay_new_correct": _share(should_stay, "correct"),
+        "family_accuracy": sum(r["family_outcome"] == "correct" for r in rows) / n,
+        "family_false_join_rate": sum(r["family_outcome"] == "false join" for r in rows) / n,
+        "purity": _mean([r["purity"] for r in rows if r["purity"] is not None]),
+        "n_should_join": len(should_join), "n_should_stay": len(should_stay),
         "statuses": dict(Counter(r["status"] for r in rows)),
     }
 
@@ -95,7 +91,7 @@ def leave_one_out(profiles: Dict[str, dict], gold: dict, tau: float) -> List[dic
     for cid in sorted(profiles):
         db = {k: v for k, v in profiles.items() if k != cid}
         rows.append({"item": cid, **outcome(profiles[cid], db, tau, partners(cid, strict) & set(db),
-                                            (partners(cid, broad) | partners(cid, strict)) & set(db))})
+                                            partners(cid, broad) & set(db))})
     return rows
 
 
@@ -117,11 +113,9 @@ def variant_test(profiles: Dict[str, dict], variants: Dict[str, List[dict]], gol
 
 def run(tau: float, profiles: Optional[Dict[str, dict]] = None, gold: Optional[dict] = None,
         variants: Optional[Dict[str, List[dict]]] = None) -> Dict[str, Dict[str, object]]:
-    profiles = profiles if profiles is not None else require_profiles(load_profiles())
-    gold = gold if gold is not None else json.load(open(gold_file(), encoding="utf-8"))
-    ids = set(gold.get("case_ids") or profiles)
-    profiles = {k: v for k, v in profiles.items() if k in ids}
-    variants = variants if variants is not None else load_all_variants(profiles)
+    gold = gold if gold is not None else load_gold()
+    profiles = labelled(profiles if profiles is not None else require_profiles(load_profiles()), gold)
+    variants = variants if variants is not None else load_variants(profiles)
     report = {"leave-one-out (real cases)": summarise(leave_one_out(profiles, gold, tau))}
     if variants:
         for known in (True, False):
@@ -130,31 +124,23 @@ def run(tau: float, profiles: Optional[Dict[str, dict]] = None, gold: Optional[d
                         f"{'same infrastructure' if infra else 'new infrastructure'}")
                 report[name] = summarise(variant_test(profiles, variants, gold, tau, known, infra))
     stay = [r for r in report.values() if r["n_should_stay"]]
-    report["must-not-link (all items that should stay new)"] = {
-        "n": sum(r["n_should_stay"] for r in stay),
-        "stay_new_correct": (sum(r["stay_new_correct"] * r["n_should_stay"] for r in stay) /
-                             max(1, sum(r["n_should_stay"] for r in stay))),
-    }
+    n_stay = sum(r["n_should_stay"] for r in stay)
+    report[MUST_NOT_LINK] = {"n": n_stay, "stay_new_correct":
+                             sum(r["stay_new_correct"] * r["n_should_stay"] for r in stay) / max(1, n_stay)}
     return report
-
-
-SHORT = {"leave-one-out (real cases)": "LOO", "variants, parent known, same infrastructure": "known+same",
-         "variants, parent known, new infrastructure": "known+new", "variants, parent held out, same infrastructure":
-         "held+same", "variants, parent held out, new infrastructure": "held+new"}
 
 
 def sweep(taus, profiles=None, gold=None, variants=None) -> List[Dict[str, object]]:
     """run() for every tau: per test the share of correct outcomes and of false joins."""
     profiles = profiles if profiles is not None else require_profiles(load_profiles())
-    gold = gold if gold is not None else json.load(open(gold_file(), encoding="utf-8"))
-    variants = variants if variants is not None else load_all_variants(profiles)
+    variants = variants if variants is not None else load_variants(profiles)
     rows = []
     for tau in taus:
         rep = run(round(tau, 2), profiles, gold, variants)
-        rows.append({"tau": round(tau, 2), "tests": {SHORT.get(k, k): (r["accuracy"], r["false_join_rate"])
-                                                     for k, r in rep.items() if "accuracy" in r},
-                     "purity": {SHORT.get(k, k): r["purity"] for k, r in rep.items() if "purity" in r},
-                     "stay_new": rep["must-not-link (all items that should stay new)"]["stay_new_correct"]})
+        tests = {SHORT[k]: r for k, r in rep.items() if k in SHORT}
+        rows.append({"tau": round(tau, 2), "tests": {k: (r["accuracy"], r["false_join_rate"]) for k, r in tests.items()},
+                     "purity": {k: r["purity"] for k, r in tests.items()},
+                     "stay_new": rep[MUST_NOT_LINK]["stay_new_correct"]})
     return rows
 
 

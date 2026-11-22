@@ -11,25 +11,26 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest  # noqa: E402
 
-from ads import analyze as an  # noqa: E402
+from ads import database, dedup  # noqa: E402
 from ads.llm.client import MockClient  # noqa: E402
+from ads.web import api, uploads  # noqa: E402
 from ads.web import server as srv  # noqa: E402
 from test_similarity import make  # noqa: E402
 
 
 @pytest.fixture
 def panel(monkeypatch, tmp_path):
-    state = srv.State.__new__(srv.State)  # skip reload(): no profiles from disk
+    state = api.State.__new__(api.State)  # skip reload(): no profiles from disk
     state.lock, state.pending, state.groups = threading.Lock(), {}, {}
     state.profiles = {"a": make(product="AlphaPlat", tracker="meta_pixel:111"), "b": make(product="AlphaPlat"),
                       "c": make(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor")}
     state.client = MockClient([json.dumps(make(product="AlphaPlat"))])
     state.reload = lambda: state.groups.clear()
-    monkeypatch.setattr(an.dedup, "load_fingerprints", lambda: {})
-    monkeypatch.setattr(an, "first_image", lambda cid: None)
-    monkeypatch.setattr(srv, "case_meta", lambda cid: {})
-    real_save = an.save_case
-    monkeypatch.setattr(an, "save_case", lambda case, p, d: real_save(case, p, d, cases_dir=str(tmp_path)))
+    monkeypatch.setattr(dedup, "load_fingerprints", lambda: {})
+    monkeypatch.setattr(database, "first_image", lambda cid: None)
+    monkeypatch.setattr(database, "case_meta", lambda cid: {})
+    real_save = database.save_case
+    monkeypatch.setattr(database, "save_case", lambda case, p, d: real_save(case, p, d, cases_dir=str(tmp_path)))
     server = srv.ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(state))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}", tmp_path
@@ -120,7 +121,7 @@ def test_analyse_uploaded_files_then_save(panel, monkeypatch, tmp_path):
     from PIL import Image
     from ads.preprocess import domain_meta
     base, cases = panel
-    monkeypatch.setattr(srv, "UPLOADS", str(tmp_path / "uploads"))
+    monkeypatch.setattr(uploads, "UPLOADS", str(tmp_path / "uploads"))
     monkeypatch.setattr(domain_meta, "case_metadata", lambda *a, **k: [])   # no network in tests
     buf = io.BytesIO()
     Image.new("RGB", (300, 200), "red").save(buf, format="PNG")
@@ -140,7 +141,7 @@ def test_analyse_uploaded_files_then_save(panel, monkeypatch, tmp_path):
 
 def test_upload_with_nothing_usable_is_a_clear_400(panel, monkeypatch, tmp_path):
     base, _ = panel
-    monkeypatch.setattr(srv, "UPLOADS", str(tmp_path / "uploads"))
+    monkeypatch.setattr(uploads, "UPLOADS", str(tmp_path / "uploads"))
     body, ctype = multipart({"tau": "0.6"}, [("virus.exe", b"MZ")])
     req = urllib.request.Request(base + "/api/analyze", data=body, headers={"Content-Type": ctype})
     with pytest.raises(urllib.error.HTTPError) as e:
@@ -151,7 +152,7 @@ def test_upload_with_nothing_usable_is_a_clear_400(panel, monkeypatch, tmp_path)
 
 def test_safe_names_stay_inside_and_do_not_collide():
     used = set()
-    assert srv.safe_name("../../etc/passwd", used) == "passwd"
-    assert srv.safe_name("C:\\x\\shot one.png", used) == "shot_one.png"
-    assert srv.safe_name("shot one.png", used) == "shot_one_2.png"
-    assert srv.safe_name(".hidden", used) == "hidden"
+    assert uploads.safe_name("../../etc/passwd", used) == "passwd"
+    assert uploads.safe_name("C:\\x\\shot one.png", used) == "shot_one.png"
+    assert uploads.safe_name("shot one.png", used) == "shot_one_2.png"
+    assert uploads.safe_name(".hidden", used) == "hidden"

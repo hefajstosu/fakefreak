@@ -34,7 +34,7 @@ from typing import Dict, Iterable, List, Optional
 import requests
 
 from ..paths import CACHE
-from .har import host, reg_domain
+from ..urls import host, reg_domain
 
 CACHE_DIR = os.path.join(CACHE, "domain_meta")
 CACHE_DAYS = 7

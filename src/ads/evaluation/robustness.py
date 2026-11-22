@@ -1,11 +1,10 @@
 """Channel ablation and missing-data robustness, treating `similarity.score` as a black box.
 
-    python -m ads.robustness channels   [--tau 0.55]            # switch each feature group off in turn
-    python -m ads.robustness degrade    [--tau 0.55]            # test cases with material removed
-    python -m ads.robustness make-degraded [--model M]          # LLM re-extraction of reduced inputs (uses quota)
+    python -m ads.evaluation.robustness channels   [--tau 0.55]     # switch each feature group off in turn
+    python -m ads.evaluation.robustness degrade    [--tau 0.55]     # test cases with material removed
+    python -m ads.evaluation.robustness make-degraded [--model M]   # LLM re-extraction of reduced inputs (uses quota)
 
-Channel ablation masks a feature group in BOTH profiles of every pair, so any similarity implementation (the
-placeholder or a replacement) can be evaluated without changes.
+Channel ablation masks a feature group in BOTH profiles of every pair; the similarity is used as a black box.
 
 Degradation: the test case X loses material while the rest of the database stays complete; we ask whether X still
 lands with its gold partners. Two kinds of scenario:
@@ -18,16 +17,13 @@ import argparse
 import copy
 import json
 import os
-import sys
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
-from .clustering import pair_scores
-from .evaluate import gold_pairs, load_profiles, require_profiles
-from .paths import CASES, gold_file
-from .similarity import score
-
-STRICT = {"same_campaign", "same_template"}
-BROAD = STRICT | {"same_scheme"}
+from ..clustering import pair_scores
+from ..database import load_profiles, require_profiles
+from ..paths import CASES, gold_file
+from ..similarity import score
+from .gold import BROAD, STRICT, auc, gold_pairs, labelled, load_gold, partners
 
 
 def _infra(p):
@@ -89,16 +85,9 @@ def mask_profile(p: dict, groups: List[str]) -> dict:
     return q
 
 
-def _auc(pos: List[float], neg: List[float]) -> float:
-    if not pos or not neg:
-        return float("nan")
-    wins = sum((a > b) + 0.5 * (a == b) for a in pos for b in neg)
-    return wins / (len(pos) * len(neg))
-
 
 def metrics(profiles: Dict[str, dict], gold: dict, tau: float) -> dict:
-    ids = set(gold.get("case_ids") or profiles)
-    profiles = {k: v for k, v in profiles.items() if k in ids}
+    profiles = labelled(profiles, gold)
     scores = pair_scores(profiles)
     strict, broad = gold_pairs(gold, STRICT), gold_pairs(gold, BROAD)
     pos = [scores[p]["score"] for p in strict if p in scores]
@@ -107,7 +96,7 @@ def metrics(profiles: Dict[str, dict], gold: dict, tau: float) -> dict:
     tp_b = len(pred & broad)
     triples = [t for t in gold["ranking_triples"] if {t["anchor"], t["closer"], t["farther"]} <= set(profiles)]
     sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
-    return {"auc": _auc(pos, neg), "pos": sum(pos) / len(pos), "neg": sum(neg) / len(neg),
+    return {"auc": auc(pos, neg), "pos": sum(pos) / len(pos), "neg": sum(neg) / len(neg),
             "triples": f"{sum(sc(t['anchor'], t['closer']) > sc(t['anchor'], t['farther']) for t in triples)}/{len(triples)}",
             "strict_recall": len(pred & strict) / len(strict) if strict else float("nan"),
             "broad_precision": tp_b / len(pred) if pred else 1.0, "broad_recall": tp_b / len(broad) if broad else float("nan")}
@@ -122,16 +111,14 @@ def channel_ablation(profiles, gold, tau):
 
 # ---------------------------------------------------------------- degradation of one test case
 
-def load_real_degraded(cid: str, scenario: str):
+def load_real_degraded(cid: str, scenario: str) -> Optional[dict]:
     f = os.path.join(CASES, cid, f"degraded_{scenario}.json")
     return json.load(open(f, encoding="utf-8")) if os.path.exists(f) else None
 
 
 def degradation(profiles, gold, tau):
-    ids = set(gold.get("case_ids") or profiles)
-    profiles = {k: v for k, v in profiles.items() if k in ids}
+    profiles = labelled(profiles, gold)
     strict, broad = gold_pairs(gold, STRICT), gold_pairs(gold, BROAD)
-    partners = lambda x, pairs: {b if a == x else a for a, b in pairs if x in (a, b)}  # noqa: E731
     scenarios = {
         "full (baseline)": lambda x, p: p,
         "masked: no technical traces": lambda x, p: mask_profile(p, [list(GROUPS)[0]]),
@@ -162,14 +149,13 @@ def degradation(profiles, gold, tau):
     return out
 
 
-def make_degraded(model: str, cases: List[str] = None) -> None:
+def make_degraded(model: str, cases: Optional[List[str]] = None) -> None:
     """Re-extract reduced inputs through the LLM (one call per case and scenario)."""
-    from .llm.client import make_client
-    from .llm.extract import extract
-    cases_dir = CASES
+    from ..llm.client import make_client
+    from ..llm.extract import extract
     client = make_client(extraction_model=model)
-    for cid in cases or sorted(os.listdir(cases_dir)):
-        f = os.path.join(cases_dir, cid, "case_input.json")
+    for cid in cases or sorted(os.listdir(CASES)):
+        f = os.path.join(CASES, cid, "case_input.json")
         if not os.path.exists(f):
             continue
         case = json.load(open(f, encoding="utf-8"))
@@ -180,7 +166,7 @@ def make_degraded(model: str, cases: List[str] = None) -> None:
         for scenario, parts, tech in (
                 ("ad_only", [p for p in case["parts"] if p["role"] == "ad_creative"], no_tech),
                 ("page_only", [p for p in case["parts"] if p["role"] != "ad_creative"], case["technical_summary"])):
-            out = os.path.join(cases_dir, cid, f"degraded_{scenario}.json")
+            out = os.path.join(CASES, cid, f"degraded_{scenario}.json")
             if os.path.exists(out):
                 continue
             reduced = dict(case, parts=copy.deepcopy(parts), technical_summary=tech)
@@ -194,7 +180,7 @@ def make_degraded(model: str, cases: List[str] = None) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Feature groups switched off; material removed from a case")
     ap.add_argument("cmd", choices=["channels", "degrade", "make-degraded"])
     ap.add_argument("--tau", type=float, default=0.55)
     ap.add_argument("--model", default="gemini-3.5-flash-lite")
@@ -202,7 +188,7 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "make-degraded":
         return make_degraded(a.model)
-    profiles, gold = require_profiles(load_profiles()), json.load(open(a.gold, encoding="utf-8"))
+    profiles, gold = require_profiles(load_profiles()), load_gold(a.gold)
     if a.cmd == "channels":
         print(f"channel ablation at tau={a.tau} (cases: {len(profiles)})\n")
         print(f"{'condition':<72}{'AUC':>6}{'pos':>6}{'neg':>6}{'trip':>6}{'strRec':>7}{'brdP':>6}{'brdR':>6}")
@@ -218,4 +204,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

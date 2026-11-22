@@ -133,13 +133,11 @@ def pick(f: Dict[str, np.ndarray], source: str) -> np.ndarray:
 
 def gold_report(source: str) -> Dict[str, object]:
     """Same-face matches on gold same-campaign, same-scheme and unrelated pairs (counts at SAME_PERSON)."""
-    from .. import robustness
-    from ..evaluate import gold_pairs
-    from ..paths import gold_file
-    gold = json.load(open(gold_file(), encoding="utf-8"))
+    from ..evaluation.gold import BROAD, STRICT, gold_pairs, load_gold
+    gold = load_gold()
     ids = sorted(set(gold.get("case_ids") or []) & set(os.listdir(CASES)))
     faces = {c: pick(case_faces(c), source) for c in ids}
-    strict, broad = gold_pairs(gold, robustness.STRICT), gold_pairs(gold, robustness.BROAD)
+    strict, broad = gold_pairs(gold, STRICT), gold_pairs(gold, BROAD)
     rows = {"strict": [], "same scheme": [], "unrelated": []}
     for a, b in combinations(ids, 2):
         v = best_match(faces[a], faces[b])

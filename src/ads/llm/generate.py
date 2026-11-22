@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 
 from jsonschema import Draft7Validator
 
-from .. import validate as vmod
+from . import validate as vmod
 from ..paths import CASES, PROMPTS, SCHEMAS
 from .client import load_llm_config, make_client
 

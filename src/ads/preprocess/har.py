@@ -10,18 +10,10 @@ Only URLs, tracker IDs, parameter NAMES and first-party file names are kept.
 import json
 import re
 import sys
-from urllib.parse import urlsplit, parse_qsl
+from urllib.parse import urlsplit
 
-# Generic mass infrastructure: excluded from URL/domain lists.
-MASS_INFRA = (
-    "cloudflare.com", "cloudflareinsights.com", "cdnjs.cloudflare.com", "amazonaws.com",
-    "cloudfront.net", "google.com", "gstatic.com", "googleapis.com", "googleusercontent.com",
-    "googletagmanager.com", "google-analytics.com", "doubleclick.net", "unpkg.com",
-    "jsdelivr.net", "b-cdn.net", "bunnycdn.com", "jquery.com", "fontawesome.com",
-    "facebook.com", "facebook.net", "fbcdn.net", "tiktok.com", "akamaihd.net",
-    "azureedge.net", "fastly.net", "youtube.com", "ytimg.com",
-)
-# Tracker ID patterns found in request URLs.
+from ..urls import host, is_mass, reg_domain, sanitize_url
+
 TRACKER_PATTERNS = [
     ("meta_pixel", re.compile(r"facebook\.com/tr/?\?[^#]*?\bid=(\d{6,})")),
     ("google_ads_conversion", re.compile(r"google\.com/pagead/(?:1p-)?conversion/(\d{6,})")),
@@ -31,38 +23,7 @@ TRACKER_PATTERNS = [
     ("google_tag", re.compile(r"googletagmanager\.com/gtag/js\?[^#]*?\bid=((?:G|AW|GT)-[A-Z0-9]+)")),
     ("tiktok_pixel", re.compile(r"tiktok\.com/[^\s]*?[?&]sdkid=([A-Z0-9]+)")),
 ]
-KEEP_VALUE_PARAMS = ("utm_",)  # keep values only for utm_* (campaign anchors)
-TWO_LEVEL = ("com.pl", "org.pl", "net.pl", "co.uk")
-
-
-def host(url):
-    return (urlsplit(url).hostname or "").lower()
-
-
-GOOGLE_RX = re.compile(r"(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$")
 UUID_RX = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
-
-
-def is_mass(h):
-    if GOOGLE_RX.search(h):
-        return True
-    return any(h == d or h.endswith("." + d) for d in MASS_INFRA)
-
-
-def reg_domain(h):
-    parts = h.split(".")
-    n = 3 if ".".join(parts[-2:]) in TWO_LEVEL else 2
-    return ".".join(parts[-n:])
-
-
-def sanitize_url(url):
-    """Keep utm_* values; keep other parameter names only (click IDs are per-user noise)."""
-    s = urlsplit(url)
-    pairs = []
-    for k, v in parse_qsl(s.query, keep_blank_values=True):
-        pairs.append(f"{k}={v}" if k.startswith(KEEP_VALUE_PARAMS) else f"{k}=<value>")
-    base = f"{s.scheme}://{s.netloc}{s.path}"
-    return base + ("?" + "&".join(pairs) if pairs else "")
 
 
 def add(lst, item):

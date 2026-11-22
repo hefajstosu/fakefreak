@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ads import features  # noqa: E402
+from ads.evaluation import features  # noqa: E402
 from test_similarity import make  # noqa: E402
 
 OTHER = dict(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor")

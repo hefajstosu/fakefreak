@@ -1,9 +1,9 @@
-"""Second level: families of campaigns (same kind of scam and story, no proof of one operator)."""
+"""Second level: families of campaigns (same kind of scam and story, or a shared tool; no proof of one operator)."""
 from typing import Any, Dict, List, Optional
 
 from .evidence import is_family_link
-from .linkage import _components
-from .pairs import Profiles, Scores, Variants, pair, pair_scores
+from .linkage import components
+from .pairs import Profiles, Scores, pair, pair_scores
 
 
 def _scam(p: Dict[str, Any]) -> Optional[str]:
@@ -11,21 +11,16 @@ def _scam(p: Dict[str, Any]) -> Optional[str]:
 
 
 def hierarchy(profiles: Profiles, campaigns: List[List[str]], family_tau: float,
-              scores: Optional[Scores] = None, variants: Optional[Variants] = None,
-              variant_gate: Optional[float] = None) -> List[List[int]]:
-    """Group campaign indexes into families.
+              scores: Optional[Scores] = None) -> List[List[int]]:
+    """Campaign indexes grouped into families, largest first: two campaigns are one family when some pair of their
+    members has the same scam type and a score >= family_tau or family-level evidence (evidence.is_family_link)."""
+    scores = scores if scores is not None else pair_scores(profiles)
 
-    Two campaigns are in one family when some pair of their members has the same scam type and either a score
-    >= family_tau or family-level evidence (shared platform endpoints, evidence.is_family_link). Returns lists of
-    indexes into `campaigns`, largest first. Singletons are kept.
-    """
-    scores = scores if scores is not None else pair_scores(profiles, variants, variant_gate)
-    edges = []
-    for i in range(len(campaigns)):
-        for j in range(i + 1, len(campaigns)):
-            if any(_scam(profiles[a]) == _scam(profiles[b]) and (pair(scores, a, b)["score"] >= family_tau or
-                                                                  is_family_link(pair(scores, a, b)))
-                   for a in campaigns[i] for b in campaigns[j]):
-                edges.append((i, j))
-    fams = _components(list(range(len(campaigns))), edges)
+    def related(a: str, b: str) -> bool:
+        r = pair(scores, a, b)
+        return _scam(profiles[a]) == _scam(profiles[b]) and (r["score"] >= family_tau or is_family_link(r))
+
+    edges = [(i, j) for i in range(len(campaigns)) for j in range(i + 1, len(campaigns))
+             if any(related(a, b) for a in campaigns[i] for b in campaigns[j])]
+    fams = components(range(len(campaigns)), edges)
     return sorted((sorted(f) for f in fams), key=lambda f: (-len(f), f))

@@ -1,41 +1,16 @@
-"""Turn a video ad / screen recording into the inputs the extraction prompt expects:
-a Polish transcript and a 2x2 contact sheet of 4 representative keyframes.
+"""A video ad or screen recording -> a 2x2 contact sheet of four representative keyframes (the extraction looks at
+images; speech is transcribed separately through the LLM, transcribe.py).
 
-Usage:
-  python -m ads.preprocess.video video.mp4 out_dir [--model medium] [--language pl]
-        [--samples 48] [--crop-top 0.06] [--crop-bottom 0.0] [--roi x,y,w,h]
-        [--no-transcribe]
+    python -m ads.preprocess.video video.mp4 out.jpg [--samples 48] [--crop-top 0.06] [--crop-bottom 0] [--roi x,y,w,h]
 
-Outputs in out_dir:
-  contact_sheet.jpg   2x2 sheet (no text overlays, so OCR sees only the video)
-  transcript.txt      plain transcript (empty file if none)
-  meta.json           duration, chosen timestamps, transcript segments, notes
-
-Dependencies: opencv-python-headless, numpy, pillow; faster-whisper for speech-to-text
-(decodes the audio itself, no system ffmpeg needed).
-
-Notes for screen recordings of a social feed:
-  * --crop-top removes the OS status bar (clock/battery are excluded features).
-  * --roi (fractions of the frame, e.g. 0,0.1,1,0.7) restricts selection to the
-    area where the ad plays. Without it, frames are picked from the whole screen.
+--crop-top removes a phone's status bar (clock and battery are excluded features); --roi (fractions of the frame)
+restricts the choice to the area where the ad plays.
 """
 import argparse
-import json
-import os
-import sys
 
 import cv2
 import numpy as np
 from PIL import Image
-
-# Phrases Whisper tends to hallucinate over silence/music.
-HALLUCINATIONS = (
-    "napisy stworzone przez społeczność amara.org",
-    "dziękuję za uwagę",
-    "dziękuję za obejrzenie",
-    "subskrybuj",
-    "napisy wykonane przez",
-)
 
 
 def crop_frame(frame, crop_top, crop_bottom, roi):
@@ -121,72 +96,21 @@ def make_contact_sheet(frames, out_path, tile_w=640, tile_h=720):
     sheet.save(out_path, quality=90)
 
 
-def transcribe(path, model_size, language):
-    """Return (text, segments, note). Never raises: missing audio/libs become a note."""
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError:
-        return None, [], "faster-whisper not installed; no transcript"
-    try:
-        try:
-            import ctranslate2
-            cuda = ctranslate2.get_cuda_device_count() > 0
-        except Exception:
-            cuda = False
-        model = WhisperModel(model_size, device="cuda" if cuda else "cpu",
-                             compute_type="float16" if cuda else "int8")
-        segs, _info = model.transcribe(path, language=language, vad_filter=True,
-                                       beam_size=5, condition_on_previous_text=False)
-        kept = []
-        for s in segs:
-            text = s.text.strip()
-            if s.no_speech_prob > 0.6 or s.avg_logprob < -1.0:
-                continue
-            if any(h in text.lower() for h in HALLUCINATIONS):
-                continue
-            kept.append({"start": round(s.start, 2), "end": round(s.end, 2), "text": text})
-        return " ".join(k["text"] for k in kept), kept, None if kept else "no speech detected"
-    except Exception as e:  # no audio stream, decode error, model download failure
-        return None, [], f"transcription failed: {type(e).__name__}: {e}"
-
-
-def main():
-    ap = argparse.ArgumentParser()
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Contact sheet of a video's keyframes")
     ap.add_argument("video")
-    ap.add_argument("out_dir")
-    ap.add_argument("--model", default="medium")
-    ap.add_argument("--language", default="pl")
+    ap.add_argument("out")
     ap.add_argument("--samples", type=int, default=48)
     ap.add_argument("--crop-top", type=float, default=0.0)
     ap.add_argument("--crop-bottom", type=float, default=0.0)
     ap.add_argument("--roi", default=None, help="x,y,w,h as fractions of the frame")
-    ap.add_argument("--no-transcribe", action="store_true")
     a = ap.parse_args()
     roi = tuple(float(v) for v in a.roi.split(",")) if a.roi else None
-    os.makedirs(a.out_dir, exist_ok=True)
-
     samples, duration = sample_frames(a.video, a.samples, a.crop_top, a.crop_bottom, roi)
     chosen = pick_keyframes(samples)
-    make_contact_sheet(chosen, os.path.join(a.out_dir, "contact_sheet.jpg"))
-
-    notes = []
-    text, segments = None, []
-    if not a.no_transcribe:
-        text, segments, note = transcribe(a.video, a.model, a.language)
-        if note:
-            notes.append(note)
-    open(os.path.join(a.out_dir, "transcript.txt"), "w", encoding="utf-8").write(text or "")
-    meta = {
-        "source": os.path.basename(a.video),
-        "duration_s": round(duration, 1),
-        "keyframe_times_s": [round(c["t"], 1) for c in chosen],
-        "transcript_segments": segments,
-        "notes": notes,
-    }
-    json.dump(meta, open(os.path.join(a.out_dir, "meta.json"), "w", encoding="utf-8"),
-              ensure_ascii=False, indent=2)
-    print(json.dumps({k: meta[k] for k in ("duration_s", "keyframe_times_s", "notes")}))
+    make_contact_sheet(chosen, a.out)
+    print(f"{a.out}: keyframes at {[round(c['t'], 1) for c in chosen]} s of {duration:.1f} s")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

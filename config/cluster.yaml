@@ -1,37 +1,36 @@
-# Track C. Weights are a first guess from docs/lista_cech_reklam.txt; tune on data/gold.
-embedding_model: intfloat/multilingual-e5-small   # same model as the earlier minimal implementation; try bge-m3 later
-weights:                       # applied to similarity in [0,1], over features present in both items
+# Similarity settings (src/ads/sim_functions/config.py). A key left out keeps its default in sim_functions/features.py;
+# an unknown name or a negative weight is an error. Weights are first guesses, same-weight choices by analogy, not
+# fitted to the ten sample cases; measure changes with `python -m ads.evaluation.features` and `... .quality`.
+weights:                       # content features, similarity in [0, 1] over the features present on both sides
   scam_type: 1.0
+  topic: 0.5
   narrative: 0.8
   promise: 0.8
-  product_name: 1.0
+  call_to_action: 0.5
+  keywords: 0.3
+  persuasion_devices: 0.5
+  summary: 0.8                 # canonical_comparison_text
   featured_people: 0.8
   companies: 0.8
   impersonated_media: 0.8
+  product_name: 1.0
+  amounts_dates_locations: 0.2
   ad_creative_template: 0.8
   landing_page_template: 0.8
-  persuasion_devices: 0.5
-  call_to_action: 0.5
+  funnel_stages: 0.3
   setting_and_props: 0.3
-  amounts_dates_locations: 0.2
-  embedding: 0.8
+  logos_and_badges: 0.0        # explained, not scored: a shared channel logo is not evidence
   page_structure: 0.8          # page skeleton (tag paths, CSS classes); as landing_page_template, its LLM counterpart
-  logos_and_badges: 0.0        # reported in explanations, not scored: a shared channel logo is not evidence
-anchors:                       # exact-match technical artifacts, weighted by rarity log(N/df)
+  ad_library_page_name: 0.7
+anchors:                       # exact-match technical traces, overlap of the values on both sides
   tracker_ids: 1.0
   redirect_chain_domains: 0.9
   dom_and_form_clues: 0.8
-  ad_library_page_name: 0.7
   page_assets: 0.8             # identical large page images (the page kit); as dom_and_form_clues
   url_template: 0.5            # own tracking parameters / ad campaign IDs in the funnel URLs
+  infra_metadata: 0.0          # registration batch, non-CDN hosting, certificate neighbours: explained, not scored
+ignore_values: []              # trace values never used as evidence (mass infrastructure that slipped through)
 # Supporting features count only when they agree (similarity >= supporting_min); a difference is dropped like missing
-# data instead of lowering the score. Off by default: measured with `python -m ads.quality` (METHODOLOGY section 10).
+# data. Off: measured with `python -m ads.evaluation.quality` (docs/METHODOLOGY.md, section 10).
 supporting_features: []        # e.g. [featured_people, product_name, companies, impersonated_media]
 supporting_min: 0.5
-ignore_values: []              # mass-infrastructure values (exact strings) never used as anchor evidence; read by sim_functions/config.py
-thresholds:                    # parsed by sim_functions/config.py but not used by any code yet (the demo slider sets tau)
-  global_tau: 0.60
-  k_sigma: 2.0
-  min_members_for_calibration: 3
-  top_k: 3
-  strong_link: 0.90

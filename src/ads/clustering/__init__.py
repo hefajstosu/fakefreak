@@ -1,23 +1,20 @@
-"""Grouping of articles into campaigns and families. All grouping logic lives here.
+"""Grouping of articles into campaigns and families of campaigns.
 
-    from ads.clustering import pair_scores, cluster, hierarchy, assign
-    scores = pair_scores(profiles)                  # N x N table of ads.similarity.score results
-    campaigns = cluster(profiles, tau, scores)      # average-link groups, must-link on hard evidence
+    scores = pair_scores(profiles)                       # N x N table of similarity.score results
+    campaigns = cluster(profiles, tau, scores)           # must-links first, then average link at tau
     families = hierarchy(profiles, campaigns, family_tau, scores)   # indexes into `campaigns`
-    assign(new_profile, profiles, tau)              # where a new article goes
+    assign(new_profile, profiles, tau, campaigns)        # which campaigns a new article joins
 
-Pass `variants={case_id: [variant profiles]}` to pair_scores/cluster/assign to use synthetic variants as extra
-comparisons. They only raise a real article's score; they are never members of any group, and are never compared with each
-other. `variant_gate=0.15` skips the variant comparisons of pairs that score below it and share no hard evidence.
-
-`ads/cluster.py` only re-exports these names for older callers.
+Synthetic variants ({case id: [variant profiles]}, load_variants) can be given to pair_scores as extra comparisons:
+they only raise the score of their parent's pairs and are never grouped.
 """
 from .assign import assign
 from .evidence import DEFAULT_MUST_LINK, FAMILY_LINK, SAME_CONTENT_SCORE, is_family_link, is_must_link, joins_alone
 from .families import hierarchy
-from .linkage import average_score, cluster
+from .linkage import average_score, cluster, components
 from .pairs import best_score, pair, pair_scores
-from .variants import load_all_variants, load_variants
+from .variants import load_variants
 
-__all__ = ["pair_scores", "best_score", "load_variants", "load_all_variants", "pair", "cluster", "average_score", "hierarchy", "assign", "is_must_link", "is_family_link", "joins_alone", "SAME_CONTENT_SCORE",
-           "DEFAULT_MUST_LINK"]
+__all__ = ["assign", "DEFAULT_MUST_LINK", "FAMILY_LINK", "SAME_CONTENT_SCORE", "is_family_link", "is_must_link",
+           "joins_alone", "hierarchy", "average_score", "cluster", "components", "best_score", "pair", "pair_scores",
+           "load_variants"]

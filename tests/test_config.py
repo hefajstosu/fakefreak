@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ads.sim_functions import ANCHOR_WEIGHTS, DEFAULT_WEIGHTS, compare_all, load_config  # noqa: E402
+from ads.sim_functions import DEFAULT_WEIGHTS, compare_all, load_config  # noqa: E402
 from test_similarity import make  # noqa: E402
 
 
@@ -19,7 +19,7 @@ def write(tmp_path, text):
 
 def test_repo_config_is_valid_and_matches_defaults_for_listed_keys():
     cfg = load_config()
-    assert set(cfg["weights"]) == set(DEFAULT_WEIGHTS) | set(ANCHOR_WEIGHTS)
+    assert set(cfg["weights"]) == set(DEFAULT_WEIGHTS)
     assert cfg["weights"]["scam_type"] == 1.0 and cfg["weights"]["topic"] == DEFAULT_WEIGHTS["topic"]  # unlisted key keeps default
 
 
@@ -40,8 +40,8 @@ def test_unknown_or_negative_weight_is_an_error(tmp_path):
 def test_ignore_values_are_never_anchor_evidence(tmp_path):
     a, b = make(clues=["file:x.js", "form:a"]), make(clues=["file:x.js", "form:b"])
     cfg = load_config(write(tmp_path, "ignore_values: ['file:x.js']\n"))
-    plain = compare_all(a, b, anchor_stats={})["features"]["dom_and_form_clues"]["similarity"]
-    ignored = compare_all(a, b, anchor_stats=cfg["anchor_stats"])["features"]["dom_and_form_clues"]["similarity"]
+    plain = compare_all(a, b)["features"]["dom_and_form_clues"]["similarity"]
+    ignored = compare_all(a, b, ignore=cfg["ignore"])["features"]["dom_and_form_clues"]["similarity"]
     assert plain > 0 and ignored == 0
 
 

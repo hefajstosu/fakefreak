@@ -1,4 +1,4 @@
-"""Tests for the panel's analysis module. Synthetic data only; no network (MockClient, no URL fetched)."""
+"""ads.analysis (and the database it writes to) on synthetic data: no network, no LLM (MockClient)."""
 import json
 import os
 import sys
@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ads import analyze as an  # noqa: E402
+from ads import analysis as an, database  # noqa: E402
 from ads.llm.client import MockClient  # noqa: E402
 from test_similarity import make  # noqa: E402
 
@@ -27,11 +27,10 @@ def test_build_case_from_pasted_text_only():
 def test_build_case_roles_for_screenshots_pages_and_text(tmp_path):
     page = tmp_path / "p.html"
     page.write_text("<html><body><p>Artykuł o platformie.</p></body></html>", encoding="utf-8")
-    case, _ = an.build_case(text="Formularz", images=["ad.png"], html_files=[str(page)], product="AlphaPlat",
-                            text_role="offer_page")
-    assert [p["role"] for p in case["parts"]] == ["ad_creative", "bridge_page", "offer_page"]
+    case, _ = an.build_case(text="Formularz", images=["ad.png"], html_files=[str(page)])
+    assert [p["role"] for p in case["parts"]] == ["ad_creative", "bridge_page", "bridge_page"]
     assert case["parts"][0]["images"] == ["ad.png"] and "Artykuł o platformie" in case["parts"][1]["text"]
-    assert case["parts"][2]["text"].startswith("Product or platform named by the analyst: AlphaPlat")
+    assert case["parts"][2]["text"] == "Formularz"
 
 
 def test_compare_needs_no_llm_and_reports_capture_duplicates():
@@ -71,8 +70,8 @@ def test_groups_overview_separates_scam_types_and_lists_evidence():
 
 def test_save_case_writes_profile_and_unconfirmed_status(tmp_path):
     case, _ = an.build_case(text="tekst")
-    cid = an.save_case(case, DB["a"], {"status": "new_unconfirmed"}, cases_dir=str(tmp_path))
-    assert cid == "web_1" and an.save_case(case, DB["a"], None, cases_dir=str(tmp_path)) == "web_2"
+    cid = database.save_case(case, DB["a"], {"status": "new_unconfirmed"}, cases_dir=str(tmp_path))
+    assert cid == "web_1" and database.save_case(case, DB["a"], None, cases_dir=str(tmp_path)) == "web_2"
     meta = json.load(open(tmp_path / "web_1" / "meta.json", encoding="utf-8"))
     assert meta == {"decision": "new_unconfirmed", "status": "unconfirmed"}
     assert json.load(open(tmp_path / "web_1" / "case_input.json", encoding="utf-8"))["case_id"] == "web_1"
@@ -85,17 +84,16 @@ def test_case_summary_flattens_profile():
 
 def test_pair_table_matches_pair_scores_and_compares_each_pair_once(monkeypatch):
     from ads import clustering
-    an._PAIRS.clear()
-    variants = {"c": [make()]}
-    for var in (None, variants):
-        full = clustering.pair_scores(DB, var)
-        table = an.pair_table(DB, var)
-        assert table.keys() == full.keys()
-        assert all(table[k]["score"] == full[k]["score"] and table[k]["strong_links"] == full[k]["strong_links"]
-                   for k in full)
+    from ads.analysis import index
+    an.reset()
+    full = clustering.pair_scores(DB)
+    table = an.pair_table(DB)
+    assert table.keys() == full.keys()
+    assert all(table[k]["score"] == full[k]["score"] and table[k]["strong_links"] == full[k]["strong_links"]
+               for k in full)
     calls = []
-    real = clustering.best_score
-    monkeypatch.setattr(clustering, "best_score", lambda *a, **k: calls.append(1) or real(*a, **k))
+    real = index.score
+    monkeypatch.setattr(index, "score", lambda *a: calls.append(1) or real(*a))
     an.pair_table(DB)
     assert calls == []                          # every pair is remembered
     an.pair_table({**DB, "d": make(product="Other")})
@@ -104,8 +102,7 @@ def test_pair_table_matches_pair_scores_and_compares_each_pair_once(monkeypatch)
 
 def test_campaigns_are_clustered_once_per_database_state(monkeypatch):
     from ads import clustering
-    an._PAIRS.clear()
-    an._GROUPS.clear()
+    an.reset()
     calls = []
     real = clustering.cluster
     monkeypatch.setattr(clustering, "cluster", lambda *a, **k: calls.append(1) or real(*a, **k))
@@ -117,8 +114,7 @@ def test_campaigns_are_clustered_once_per_database_state(monkeypatch):
 
 
 def test_compare_explains_the_decision_and_every_campaign():
-    an._PAIRS.clear()
-    an._GROUPS.clear()
+    an.reset()
     r = an.compare(make(product="AlphaPlat"), None, DB, 0.6, fingerprints={})
     assert r["reasons"]["status"] == r["decision"]["status"] and r["reasons"]["thresholds"]["tau"] == 0.6
     rows = {tuple(c["members"]): c for c in r["campaigns"]}
