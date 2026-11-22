@@ -34,12 +34,13 @@ const FEATURE = {
   setting_and_props: "Sceneria i rekwizyty", amounts_dates_locations: "Kwoty, daty, miejsca",
   page_structure: "Szkielet strony (HTML, klasy CSS)", page_assets: "Zestaw obrazów strony",
   url_template: "Szablon śledzenia w adresach URL", logos_and_badges: "Logotypy i oznaczenia",
+  infra_metadata: "Metadane domen i infrastruktury",
 };
 const EVIDENCE = {
   tracker: "wspólny identyfikator trackera", endpoint: "wspólne endpointy platformy (sesja/formularz)",
   file: "wspólny charakterystyczny plik strony", domain: "wspólna domena", page: "ta sama strona sponsorująca",
   images: "wspólne identyczne obrazy strony (ten sam zestaw)", adid: "ten sam identyfikator kampanii reklamowej",
-  tracking: "ten sam własny szablon parametrów śledzenia", other: "dowód",
+  tracking: "ten sam własny szablon parametrów śledzenia", certificate: "domeny na jednym certyfikacie", other: "dowód",
 };
 const MISSING = { a: "brak danych po stronie A", b: "brak danych po stronie B", both: "brak danych po obu stronach",
   unknown: "nie do porównania", supporting: "różne, ale to cecha wspierająca: różnica nie obniża wyniku" };
@@ -50,7 +51,7 @@ const f2 = (x) => (x == null ? "–" : Number(x).toFixed(2));
 const pretty = (v) => (v == null ? "–" : SCAM[v] || String(v).replaceAll("_", " "));
 const evText = (e) => `${EVIDENCE[e.kind] || e.kind}: ${e.value}`;
 const RAW_EVIDENCE = [["shared tracker ID", "tracker"], ["shared session/form endpoint", "endpoint"], ["shared page images", "images"],
-  ["same ad campaign ID", "adid"], ["same tracking template", "tracking"],
+  ["same ad campaign ID", "adid"], ["same tracking template", "tracking"], ["domains on one certificate", "certificate"],
   ["shared distinctive script/style file", "file"], ["shared domain", "domain"], ["same sponsoring page", "page"]];
 const evRaw = (s) => {  // a strong_links string from the API -> Polish
   const hit = RAW_EVIDENCE.find(([prefix]) => s.startsWith(prefix));
@@ -135,6 +136,7 @@ function caseCard(s, title) {
     ["Szablon", s.templates.replace(" -> ", " → ")],
     ["Domeny", s.domains.join(", ") || "–"],
     ["Trackery", String(s.trackers.length)],
+    ["Domena", (s.infra && s.infra.length) ? infraSummary(s.infra) : "–"],
   ];
   const fields = el("dl", { class: "fields" }, rows.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: v })]));
   const head = el("div", { class: "case-title" }, [
@@ -165,8 +167,35 @@ function valueText(feature, v) {
 const clipText = (t, n = 80) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 const listText = (items, n = 6) => items.slice(0, n).map((x) => clipText(String(x))).join(", ") + (items.length > n ? ` (+${items.length - n})` : "");
 
+function infraText(fact) {  // one domain/infrastructure fact (preprocess/domain_meta.py) in Polish
+  const [kind, ...rest] = fact.split(":");
+  const v = rest.join(":");
+  const map = {
+    regbatch: () => { const [d, r] = v.split("|"); return `zarejestrowane tego samego dnia (${d}) u tego samego rejestratora (${r})`; },
+    ns: () => `serwery nazw: ${v}`, net: () => `sieć hostingu: ${v}`, cert_san: () => `na wspólnym certyfikacie z ${v}`,
+  };
+  return (map[kind] || (() => fact))();
+}
+
+function infraSummary(facts) {  // the case card line: registration, age, registrar, hosting, certificates
+  const get = (k) => facts.filter((f) => f.startsWith(k + ":")).map((f) => f.slice(k.length + 1));
+  const parts = [];
+  if (get("registered").length) parts.push(`zarejestrowana ${get("registered").join(", ")}`);
+  if (get("age_at_capture_days").length) parts.push(`${get("age_at_capture_days").join(", ")} dni przed nagraniem`);
+  if (get("registrar").length) parts.push(`rejestrator: ${get("registrar").join(", ")}`);
+  if (get("net").length) parts.push(`hosting: ${get("net").join(", ")}`);
+  if (get("certs").length) parts.push(`certyfikaty: ${get("certs").join(", ")}`);
+  if (get("wayback_first").length) parts.push(`archiwum od ${get("wayback_first").join(", ")}`);
+  if (facts.some((f) => f === "status:nxdomain")) parts.push("domena już nie istnieje");
+  return parts.join(" · ");
+}
+
 function fingerprintText(f) {  // page fingerprints are numbers and hashes: describe them instead of listing them
   const v = f.values || {};
+  if (f.feature === "infra_metadata") {
+    if (!(v.shared || []).length) return "brak wspólnych faktów, które łączą (partia rejestracji, hosting, certyfikat)";
+    return v.shared.map((m) => infraText(m.a)).join("; ");
+  }
   if ("shared_count" in v) return `${v.shared_count} identycznych obrazów (strony: ${v.images_a} i ${v.images_b} obrazów)`;
   if ("pages_a" in v) return `podobieństwo szkieletu najbliższych stron ${Math.round((f.similarity || 0) * 100)}% (stron: ${v.pages_a} i ${v.pages_b})`;
   return null;

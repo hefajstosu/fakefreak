@@ -33,6 +33,8 @@ ANCHOR_WEIGHTS: Dict[str, float] = {
     "ad_library_page_name": 0.7,
     "page_assets": 0.8,    # same weight as dom_and_form_clues: another first-party trace of how the page was built
     "url_template": 0.5,   # the operator's own tracking parameters / ad campaign IDs in the funnel URLs
+    "infra_metadata": 0.0,  # registration batch, non-CDN hosting / name servers, certificate neighbours: reported,
+                            # not scored until shared values can be validated (no sample domains share them)
 }
 
 
@@ -120,6 +122,8 @@ def feature_vector(a: dict, b: dict, embed: Optional[Callable] = None, soft: Opt
         v["url_template"] = A.anchor_similarity(
             A.url_tokens((ta.get("redirect_chain") or []) + (ta.get("urls_and_domains") or [])),
             A.url_tokens((tb.get("redirect_chain") or []) + (tb.get("urls_and_domains") or [])), **kw)
+        v["infra_metadata"] = A.anchor_similarity(A.infra_tokens(ta.get("domain_and_cert_metadata")),
+                                                  A.infra_tokens(tb.get("domain_and_cert_metadata")), **kw)
         v["page_assets"] = A.anchor_similarity(get(ta, "page_fingerprints.images"), get(tb, "page_fingerprints.images"),
                                                **kw)
     return v

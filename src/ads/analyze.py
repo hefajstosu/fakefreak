@@ -34,9 +34,11 @@ CAPTURE_REASONS = ("near-identical image", "same final URL")  # the same capture
 # ---------------------------------------------------------------- step 1: material -> case_input
 
 def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_files: Sequence[str] = (),
-               product: str = "", text_role: str = "bridge_page") -> Tuple[Optional[Dict[str, Any]], List[str]]:
+               product: str = "", text_role: str = "bridge_page",
+               domain_meta: bool = True) -> Tuple[Optional[Dict[str, Any]], List[str]]:
     """In-memory case_input from what an analyst has: a URL (scanned for text and technical traces), pasted text,
     screenshot paths, saved HTML pages and a product name. Returns (None, notes) when nothing usable is given.
+    With `domain_meta` the scanned domains get public registration, hosting and certificate facts.
 
     Screenshots become the ad creative, each HTML file a bridge page, and the scanned plus pasted text one more page
     with role `text_role` (default: a bridge page, i.e. the fake article)."""
@@ -52,6 +54,12 @@ def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_f
             notes += scan["notes"]
             if scan["final_url"].rstrip("/") != url.strip().rstrip("/"):
                 notes.append(f"redirected to {scan['final_url']}")
+            if domain_meta:  # public registries only (RDAP, DNS, certificate logs, archive); failures leave it out
+                try:
+                    from .preprocess import domain_meta as dm
+                    tech = dict(tech, domain_and_cert_metadata=dm.case_metadata(tech, captured=dm.today()))
+                except Exception as e:  # noqa: BLE001
+                    notes.append(f"domain metadata unavailable: {str(e)[:80]}")
         else:
             notes.append(f"could not fetch the page: {scan['error']}")
     if product.strip():
@@ -218,6 +226,7 @@ def case_summary(cid: str, p: Dict[str, Any]) -> Dict[str, Any]:
         "templates": f"{v['ad_creative_template'] or 'no ad'} -> {v['landing_page_template'] or 'no page'}",
         "persuasion": n["persuasion_devices"], "summary": p["canonical_comparison_text"],
         "domains": sorted({reg_domain(host(u)) for u in urls if host(u)}), "trackers": ta.get("tracker_ids") or [],
+        "infra": [f for f in ta.get("domain_and_cert_metadata") or [] if not f.startswith(("domain:", "regbatch:"))],
         "image": first_image(cid),
     }
 

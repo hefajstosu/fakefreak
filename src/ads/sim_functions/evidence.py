@@ -61,6 +61,12 @@ def strong_links(a: dict, b: dict) -> List[str]:
     templates = sorted(t for t in ua & ub if t.startswith("params:"))
     if templates:
         out.append(f"same tracking template: {templates[0][7:]}")
+    for x, y in ((a, b), (b, a)):  # a domain of one case named on a certificate of the other
+        san = {f[9:] for f in get(x, "technical_artifacts.domain_and_cert_metadata", []) or [] if f.startswith("cert_san:")}
+        doms = {f[7:] for f in get(y, "technical_artifacts.domain_and_cert_metadata", []) or [] if f.startswith("domain:")}
+        if san & doms:
+            out.append(f"domains on one certificate: {sorted(san & doms)[0]}")
+            break
     images = set(get(a, "technical_artifacts.page_fingerprints.images") or []) & \
         set(get(b, "technical_artifacts.page_fingerprints.images") or [])
     if len(images) >= MIN_SHARED_IMAGES:

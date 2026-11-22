@@ -238,6 +238,16 @@ def url_tokens(urls) -> list:
     return sorted(out)
 
 
+# ---------------------------------------------------------------- domain and infrastructure metadata
+
+def infra_tokens(facts) -> list:
+    """The facts of technical_artifacts.domain_and_cert_metadata that can link two cases (preprocess/domain_meta.py):
+    registration batch, non-mass name servers and hosting network, certificate neighbours. Registrar, country and
+    dates alone describe a domain but link nothing."""
+    from ..preprocess.domain_meta import linking_facts
+    return linking_facts(facts or [])
+
+
 # ---------------------------------------------------------------- page fingerprints (preprocess/page_fp.py)
 
 def page_structure(a, b) -> Score:

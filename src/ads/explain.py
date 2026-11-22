@@ -47,6 +47,7 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
     "ad_library_page_name": ("infrastructure", "enum", "technical_artifacts.ad_library_metadata.page_id_or_name"),
     "page_assets": ("infrastructure", "images", "technical_artifacts.page_fingerprints"),
     "url_template": ("infrastructure", "url", "technical_artifacts"),
+    "infra_metadata": ("infrastructure", "infra", "technical_artifacts.domain_and_cert_metadata"),
     "logos_and_badges": ("surface", "names", "visual_and_production.visible_logos_and_badges"),
     "page_structure": ("templates", "structure", "technical_artifacts.page_fingerprints"),
     "scam_type": ("core", "enum", "core_narrative.ad_goal_scam_type"),
@@ -69,7 +70,7 @@ FEATURES: Dict[str, Tuple[str, str, str]] = {
 }
 EVIDENCE_KINDS = (("shared tracker ID", "tracker"), ("shared session/form endpoint", "endpoint"),
                   ("shared page images", "images"), ("same ad campaign ID", "adid"),
-                  ("same tracking template", "tracking"),
+                  ("same tracking template", "tracking"), ("domains on one certificate", "certificate"),
                   ("shared distinctive script/style file", "file"), ("shared domain", "domain"),
                   ("same sponsoring page", "page"))
 MATCH = 0.5        # a pair of names/values counts as "shared" from this similarity on
@@ -143,6 +144,8 @@ def _values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
         return _greedy(va or [], vb or [], A._person_pair, _person)
     if kind == "names":
         return _greedy(va or [], vb or [], name_similarity)
+    if kind == "infra":      # domain metadata that can link (registration batch, hosting, certificates)
+        return _sets(A.infra_tokens(va), A.infra_tokens(vb))
     if kind == "url":        # tracking-template tokens of the funnel URLs
         tok = lambda t: A.url_tokens(((t or {}).get("redirect_chain") or []) + ((t or {}).get("urls_and_domains") or []))  # noqa: E731
         return _sets(tok(va), tok(vb))
@@ -248,7 +251,8 @@ SIGNATURE = (("scam_type", "core_narrative.ad_goal_scam_type"), ("topic", "core_
              ("tracker_ids", "technical_artifacts.tracker_ids"),
              ("redirect_chain_domains", "technical_artifacts.redirect_chain"),
              ("dom_and_form_clues", "technical_artifacts.dom_and_form_clues"), ("keywords", "core_narrative.keywords"),
-             ("logos_and_badges", "visual_and_production.visible_logos_and_badges"))
+             ("logos_and_badges", "visual_and_production.visible_logos_and_badges"),
+             ("infra_metadata", "technical_artifacts.domain_and_cert_metadata"))
 
 
 def _member_values(feature: str, raw: Any) -> Dict[str, str]:
@@ -257,6 +261,8 @@ def _member_values(feature: str, raw: Any) -> Dict[str, str]:
         return {}
     if feature == "redirect_chain_domains":
         raw = A.domains(raw)
+    if feature == "infra_metadata":  # only the facts that can link (no dates, registrars or CDNs on their own)
+        raw = A.infra_tokens(raw)
     if feature == "dom_and_form_clues":  # boilerplate files are never evidence (sim_functions/evidence.py)
         raw = [c for c in raw if not (c.startswith("file:") and c[5:].lower() in GENERIC_FILES)]
     items = raw if isinstance(raw, list) else [raw]

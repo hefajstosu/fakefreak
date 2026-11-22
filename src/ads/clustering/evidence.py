@@ -1,8 +1,8 @@
 """Hard evidence as must-link edges: some shared traces join two articles whatever their score.
 
 Evidence labels come from `sim_functions.evidence.strong_links`. Two levels:
-- campaign (must-link): a shared tracker ID, the same sponsoring page or the same ad platform campaign ID in the
-  funnel URLs identify one operator's account;
+- campaign (must-link): a shared tracker ID, the same sponsoring page, the same ad platform campaign ID in the
+  funnel URLs or two domains on one (non-CDN, at most 10 names) certificate identify one operator's account;
 - family: shared platform endpoint paths identify a shared landing-page tool, two or more identical page images a
   shared page kit, the same non-standard set of tracking parameters a shared tracking template; several operators can
   use any of them. They put two cases of the same scam type into one family of
@@ -13,7 +13,7 @@ Shared domains and files are neither (a shared mass domain would chain unrelated
 """
 from typing import Any, Dict, Iterable
 
-DEFAULT_MUST_LINK = ("shared tracker ID", "same sponsoring page", "same ad campaign ID")
+DEFAULT_MUST_LINK = ("shared tracker ID", "same sponsoring page", "same ad campaign ID", "domains on one certificate")
 FAMILY_LINK = ("shared session/form endpoint", "shared page images", "same tracking template")
 # A pair this similar is the same ad again (a variant or a re-post with swapped surface details): it joins like hard
 # evidence. Same value as decision.CONFIRM_SCORE, so a "confirmed" verdict always means the article joined that

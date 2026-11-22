@@ -96,7 +96,7 @@ def build_part(case_dir: str, idx: int, spec: Dict[str, Any], transcribe: bool, 
     return part
 
 
-def assemble(case_id: str) -> Dict[str, Any]:
+def assemble(case_id: str, domain_meta: bool = False) -> Dict[str, Any]:
     case_dir = os.path.join(CASES, case_id)
     m = json.load(open(os.path.join(case_dir, "manifest.json"), encoding="utf-8"))
     parts = [build_part(case_dir, i, s, m.get("transcribe", False), m.get("transcribe_model")) for i, s in enumerate(m["parts"])]
@@ -105,6 +105,9 @@ def assemble(case_id: str) -> Dict[str, Any]:
     for h in m.get("hars", []):
         harmod.process(os.path.join(DATA, h), tech)
     tech["page_fingerprints"] = page_fp.from_manifest(m, DATA)  # page structure and image kit (code-owned)
+    if domain_meta:  # public registration, hosting and certificate facts (network; see domain_meta.py)
+        from . import domain_meta as dm
+        tech["domain_and_cert_metadata"] = dm.case_metadata(tech, m, DATA)
     case = {"schema_version": "1.0", "case_id": m["case_id"], "parts": parts,
             "technical_summary": tech, "resolved_identities": m.get("identities", [])}
     schema = json.load(open(os.path.join(SCHEMAS, "case_input.schema.json"), encoding="utf-8"))
@@ -120,11 +123,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cases", nargs="*")
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--domain-meta", action="store_true", help="query public domain/infrastructure metadata (network)")
     a = ap.parse_args()
     ids = sorted(d for d in os.listdir(CASES) if os.path.exists(os.path.join(CASES, d, "manifest.json"))) \
         if a.all else a.cases
     for cid in ids:
-        c = assemble(cid)
+        c = assemble(cid, a.domain_meta)
         roles = [p["role"] for p in c["parts"]]
         chars = sum(len(p["text"] or "") for p in c["parts"])
         print(f"case {cid}: parts={roles} text_chars={chars} hars_urls={len(c['technical_summary']['urls_and_domains'])}"
