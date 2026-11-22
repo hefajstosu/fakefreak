@@ -36,6 +36,8 @@
 | Page does not load | server not running | `streamlit run src/ads/app.py` from the repo root |
 | No cases listed | `data/cases/*/profile.json` missing | restore the per-case files (see `README.md`) |
 
-## Container (untested)
-`Dockerfile` builds a demo image; mount `data/` at run time (the sample data is never baked in). The build was not
-verified because no Docker daemon was available when it was written.
+## Container
+`docker compose up --build` starts the web panel on http://127.0.0.1:8000 (`--profile streamlit` adds the Streamlit
+demo on 8501). `data/` is mounted from the host, so the sample data is never baked into the image; `.env` is optional.
+Built and checked with Docker 29.9 / Compose 5.7 (both services report healthy; `evaluate` inside the container prints
+the same metrics as the native run). Details: `docs/DEPLOYMENT.md`.

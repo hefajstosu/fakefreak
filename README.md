@@ -17,15 +17,31 @@ raw sample (screenshot / video / saved pages / HAR)
   -> clustering (src/ads/clustering/)              campaigns, families / "new campaign"
   -> decision   (src/ads/decision.py)              duplicate / same content / confirmed / likely / suggested family / unconfirmed
   -> evaluate   (src/ads/evaluate.py, ablation.py) metrics against data/gold
-  -> demo       (src/ads/app.py)                   Streamlit
+  -> demo       (src/ads/web/, src/ads/app.py)      web panel (default) and Streamlit, both over src/ads/analyze.py
 ```
 
-## Setup
+## Quick start with Docker (any OS)
+Needs Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin (Linux). Tested with Docker 29.9 / Compose 5.7.
 ```
-python -m venv .venv && .venv\Scripts\activate        # Python 3.9+
-pip install -r requirements.txt
-echo GEMINI_API_KEY=your_key > .env                   # key from Google AI Studio; .env is gitignored
+docker compose up --build        # web panel on http://127.0.0.1:8000 (first build about 2 minutes)
 ```
+- Put the per-case files in `data/cases/` first (see "Sample data"); the container reads and saves cases there.
+- Optional `.env` with `GEMINI_API_KEY=...` enables analysing new material. Without it the cases already in `data/` work.
+- Streamlit demo as well: `docker compose --profile streamlit up --build` (http://127.0.0.1:8501).
+- Any command from "Run" works inside the image: `docker compose run --rm panel python -m ads.evaluate`.
+- Ports are published on the host's 127.0.0.1 only, because the panel shows the organiser's samples.
+
+Deployment, configuration, security and measured scaling: `docs/DEPLOYMENT.md`.
+
+## Setup without Docker
+Python 3.9 to 3.12 on Windows, macOS or Linux (CI runs the tests on all three with 3.9 and 3.12).
+```
+python -m venv .venv
+.venv\Scripts\activate                 # Windows;  macOS/Linux: source .venv/bin/activate
+pip install -r requirements.lock        # pinned versions (tested); requirements.txt lists the direct dependencies
+echo GEMINI_API_KEY=your_key > .env     # key from Google AI Studio; .env is gitignored
+```
+Regenerate the lock after editing `requirements.txt`: `uv pip compile requirements.txt --universal --python-version 3.9 --no-header -o requirements.lock`.
 Free-tier Gemini allows about 20 requests per day per model per project. Responses are cached in `.cache/llm`.
 By default the client fails over to the models listed in `config/llm.yaml` (`fallback_models`) when one is out of quota;
 an explicit `--model` is used as is. Optional heavy components (DeepFace, local Whisper) are in `requirements-optional.txt`.
@@ -48,6 +64,7 @@ python -m ads.robustness make-degraded --model gemini-3.5-flash-lite   # re-extr
 python -m ads.robustness degrade                        # missing-data tests (ad only / pages only / no traces)
 cd .. && streamlit run src/ads/app.py                   # demonstrator
 cd src && python -m ads.web.server                      # web panel at http://127.0.0.1:8000: paste a URL, browse the campaigns
+python -m ads.bench --sizes 100 300 1000                # how comparison time grows with the database
 python -m pytest tests                                  # unit tests (synthetic data, no network)
 ```
 
@@ -58,4 +75,4 @@ clustering, evaluation and the demo unchanged.
 
 ## Docs
 `docs/METHODOLOGY.md` (approach, evaluation, limits), `docs/DEMO.md` (demo script and fallback plan), `docs/CONTRIBUTING.md`,
-`docs/LICENSES.md`. A `Dockerfile` for the demo exists but is untested (mount `data/` at run time).
+`docs/LICENSES.md`, `docs/DEPLOYMENT.md` (container, configuration, security, scaling).

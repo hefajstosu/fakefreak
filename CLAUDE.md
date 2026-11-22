@@ -39,7 +39,9 @@ config/*.yaml                 per-track settings (llm, cluster weights, preproce
 data/gold/groups.json         PUBLIC label-only gold; groups.local.json has the detailed notes (gitignored)
 tests/                        synthetic-data tests only (no network, no sample data)
 docs/                         METHODOLOGY.md, DEMO.md, CONTRIBUTING.md (track ownership), LICENSES.md, feature list, Polish originals
-Dockerfile, .dockerignore     demo image (UNTESTED: no Docker daemon was available); requirements-optional.txt = heavy extras
+Dockerfile, docker-compose.yml demo image (web panel default, Streamlit profile), tested; requirements.lock = pinned deps;
+                              requirements-optional.txt = heavy extras; .github/workflows/ci.yml = tests on 3 OSes + container
+src/ads/bench.py              scaling benchmark; docs/DEPLOYMENT.md = container, config, security, measured scaling
 archive/                      old local prototype (algorytm.py and its outputs), gitignored; not part of the pipeline
 ```
 Pipeline: raw sample -> `assemble` -> `case_input.json` -> `extract` -> `profile.json` -> `generate` -> `variants.json`
@@ -57,6 +59,7 @@ python -m ads.evaluate --matrix
 python -m ads.ablation
 cd .. && streamlit run src/ads/app.py
 python -m pytest tests          # always run before committing
+docker compose up --build       # same panel in a container (http://127.0.0.1:8000), data/ mounted
 ```
 Sample data goes in `data/raw/do_udostępnienia/`. Per-case manifests (`data/cases/<id>/manifest.json`) and the
 helper scripts in `scripts/` that create them are gitignored; ask the owner for them.

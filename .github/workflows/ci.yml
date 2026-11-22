@@ -1,0 +1,45 @@
+# Tests on the three desktop systems and the oldest and newest supported Python, then the container smoke test.
+# Synthetic data only: the organiser's samples are never in the repository, so no job needs them.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
+      - run: python -m pytest tests -q
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build
+      - name: panel starts and reports healthy
+        run: |
+          docker compose up -d
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q panel)")" = healthy ] && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/api/status
+          curl -fsS "http://127.0.0.1:8000/api/groups?tau=0.6"
+          curl -fsS -o /dev/null http://127.0.0.1:8000/
+      - name: CLI runs inside the image
+        run: docker compose run --rm panel python -c "import ads.analyze, ads.web.server, streamlit, cv2, imageio_ffmpeg; print('ok')"
+      - if: always()
+        run: docker compose logs && docker compose down -v

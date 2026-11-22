@@ -1,8 +1,8 @@
 # Dependency and service inventory
 
-The task rules (section 4) require that the solution does not infringe third-party rights, so every component is
-listed here. Licences below are from the maintainers' public listings as I know them; **verify each before the
-final submission**.
+The task rules (section 4) ask for the libraries, models and external services used, with their licences and
+limits. Licences of the Python packages below were read from the installed packages' metadata (versions from
+`requirements.lock`, Python 3.12, November 2026); hosted services follow their providers' terms.
 
 | Component | Use | Licence |
 |---|---|---|
@@ -11,12 +11,16 @@ final submission**.
 | python-dotenv | load `.env` | BSD-3-Clause |
 | PyYAML | config files | MIT |
 | jsonschema | validate JSON against schemas | MIT |
-| Pillow | image resizing | HPND (permissive) |
+| Pillow | image resizing | MIT-CMU (HPND, permissive) |
 | opencv-python-headless | video frame sampling | Apache-2.0 |
-| NumPy | numerics | BSD-3-Clause |
+| NumPy | numerics | BSD-3-Clause (bundled parts: 0BSD, MIT, Zlib, CC0-1.0) |
 | Streamlit | demonstrator | Apache-2.0 |
-| requests | optional URL fetch | Apache-2.0 |
+| requests | live URL scan, demo URL field | Apache-2.0 |
+| imageio-ffmpeg | bundled ffmpeg for audio extraction | BSD-2-Clause; the bundled ffmpeg binary (checked in the linux-aarch64 wheel) is built with `--enable-gpl --enable-version3`, i.e. GPL-3.0. It is run as a separate program, not linked. Redistributing the container image redistributes that binary, so the GPL source offer applies (ffmpeg.org) |
 | pytest | tests | MIT |
+| python:3.12-slim-bookworm (container base) | runtime image | Python: PSF-2.0; Debian packages: their own free licences (Debian policy) |
+| uv (developer tool, not shipped) | compiles `requirements.lock` | Apache-2.0 / MIT |
+| GitHub Actions (CI) | tests on 3 systems, container smoke test | GitHub terms of service |
 | faster-whisper (optional, not used yet) | speech to text | MIT |
 | DeepFace (optional, not installed) | face matching against a small public-figure set | MIT code; model weights have their own terms, check before use |
 
