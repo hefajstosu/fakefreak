@@ -152,3 +152,29 @@ def test_safe_names_stay_inside_and_do_not_collide():
     assert uploads.safe_name("C:\\x\\shot one.png", used) == "shot_one.png"
     assert uploads.safe_name("shot one.png", used) == "shot_one_2.png"
     assert uploads.safe_name(".hidden", used) == "hidden"
+
+
+def test_group_by_trait_groups_cases_with_the_same_value(panel):
+    base, _ = panel
+    code, body = call(base + "/api/group_by?trait=product")
+    assert code == 200
+    data = json.loads(body)
+    assert [g["value"] for g in data["groups"]] == ["AlphaPlat", "PillX"]
+    assert [[m["case"] for m in g["members"]] for g in data["groups"]] == [["a", "b"], ["c"]]
+    assert "scam_type" in [t["key"] for t in data["traits"]]
+
+
+def test_group_by_without_trait_lists_traits_and_unknown_trait_is_an_error(panel):
+    base, _ = panel
+    assert json.loads(call(base + "/api/group_by?trait=")[1])["groups"] == []
+    assert call(base + "/api/group_by?trait=nonsense")[0] == 400
+
+
+def test_group_by_trait_merges_spellings_and_keeps_cases_without_a_value():
+    from ads.web import traits
+    a, b, c = make(product="TVN24"), make(product="tvn24"), make(product=None)
+    c["entities"]["product_or_platform"]["generic_category"] = None
+    groups = traits.group_by({"1": a, "2": b, "3": c}, "product")
+    assert groups == [{"value": "TVN24", "members": ["1", "2"]}, {"value": None, "members": ["3"]}]
+    c["entities"]["featured_people"] = [{"name": "Ann"}, {"name": "ann"}]
+    assert traits.group_by({"3": c}, "people") == [{"value": "Ann", "members": ["3"]}]

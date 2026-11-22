@@ -4,6 +4,7 @@
 
     GET  /api/status                  {"cases", "llm"}
     GET  /api/groups?tau=0.6          campaigns with family, members, links and explanation
+    GET  /api/group_by?trait=topic    cases grouped by the value of one trait (plus the list of traits)
     GET  /api/graph?tau=0.6           cases, campaigns, families and the links between them
     GET  /api/explain?a=&b=&tau=      why two cases are linked; a=new&id=<analysis id> for the analysed article
     GET  /api/image/<case id>         first screenshot of a database case
@@ -76,6 +77,8 @@ def make_handler(state: api.State):
                     return self.send_json(200, api.status(state))
                 if url.path == "/api/groups":
                     return self.send_json(200, api.groups(state, api.parse_tau(q.get("tau", "0.6"))))
+                if url.path == "/api/group_by":
+                    return self.send_json(200, api.group_by(state, q.get("trait", "")))
                 if url.path == "/api/graph":
                     return self.send_json(200, api.graph(state, api.parse_tau(q.get("tau", "0.6"))))
                 if url.path == "/api/explain":

@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import { initAnalyser } from "./analyser.js";
 import { loadGraph } from "./graph.js";
 import { loadGroups } from "./groups.js";
+import { initTraitSelect } from "./bytrait.js";
 import { initTabs, onShow, visible } from "./tabs.js";
 
 async function loadStatus() {
@@ -26,5 +27,6 @@ $("tau").addEventListener("change", () => {
   if (visible("graf")) loadGraph();
 });
 initTabs();
+initTraitSelect(loadGroups);
 loadStatus();
 loadGroups();

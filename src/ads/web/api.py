@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .. import analysis, clustering, database, explain
 from ..llm.client import make_client
-from . import uploads
+from . import traits, uploads
 
 MAX_PENDING = 50          # unsaved analyses kept in memory (oldest dropped first, with their files)
 GRAPH_EDGES_PER_CASE = 4  # weaker links than these per case are left out of the graph (hard evidence always stays)
@@ -69,6 +69,14 @@ def groups(state: State, tau: float) -> Dict[str, Any]:
                                     "explanation": g["explanation"],
                                     "members": [summary(c, state.profiles[c]) for c in g["members"]]}
                                    for i, g in enumerate(state.overview(tau), 1)]}
+
+
+def group_by(state: State, trait: str) -> Dict[str, Any]:
+    """Cases grouped by the value of one trait (web/traits.py), with the list of traits to choose from."""
+    found = traits.group_by(state.profiles, trait) if trait else []  # no trait: only the list to choose from
+    return {"trait": trait, "traits": traits.trait_list(),
+            "groups": [{"value": g["value"], "members": [summary(c, state.profiles[c]) for c in g["members"]]}
+                       for g in found]}
 
 
 def graph(state: State, tau: float) -> Dict[str, Any]:

@@ -4,6 +4,7 @@ import { SCAM, evRaw, featureName, valueText } from "./labels.js";
 import { keyOf, state } from "./state.js";
 import { caseCard } from "./card.js";
 import { fetchPair, pairView } from "./explain.js";
+import { currentTrait, loadByTrait } from "./bytrait.js";
 
 const RULE = {
   "single case": () => "Pojedyncza sprawa: nic w bazie nie łączy się z nią twardym dowodem ani średnim podobieństwem ≥ τ.",
@@ -83,6 +84,7 @@ function groupRow(g) {
 }
 
 export async function loadGroups() {
+  if (currentTrait()) return loadByTrait(currentTrait());
   try {
     const data = await api(`/api/groups?tau=${tau()}`);
     state.groupsTau = data.tau;

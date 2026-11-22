@@ -264,3 +264,6 @@ table.mini.feats td:last-child { width: 55%; }
   .side .who { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .message.busy::before { animation: none; } }
+
+.group-mode { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; margin: 12px 0; }
+.group-mode select { font: inherit; padding: 6px 8px; border: 1px solid var(--rule-strong); background: var(--paper); color: var(--ink); border-radius: 0; }
