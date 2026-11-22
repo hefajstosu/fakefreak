@@ -61,8 +61,12 @@ def features(p: Dict[str, Any]) -> Dict[str, Any]:
     n, e, v = p["core_narrative"], p["entities"], p["visual_and_production"]
     ta = p["technical_artifacts"]
     clues = ta.get("dom_and_form_clues", [])
+    # observed POSTs (from HAR) and endpoint paths written in page scripts ("api:" clues from the URL scan) are
+    # reduced to the same host-independent prefix, e.g. "POST */api/v1/trigger/field/"
     endpoints = {re.sub(r" fields=.*", "", c) for c in clues if c.startswith("POST ")}
-    endpoints = {re.sub(r"^POST [^/]+", "POST *", c) for c in endpoints}  # host-independent pattern
+    endpoints = {re.sub(r"^POST [^/]+", "POST *", c) for c in endpoints}
+    endpoints |= {"POST *" + c[4:] for c in clues if c.startswith("api:")}
+    endpoints = {re.sub(r"/<uuid>.*$", "/", c) for c in endpoints}
     files = {c[5:] for c in clues if c.startswith("file:") and c[5:].lower() not in GENERIC_FILES}
     return {
         "scam_type": n["ad_goal_scam_type"], "topic": n["topic"],
@@ -121,6 +125,8 @@ def score(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
                              ("_files", "shared distinctive script/style file", "file"),
                              ("_domains", "shared domain", "domain")):
         common = fa[key] & fb[key]
+        if kind == "endpoint" and len(common) < 2:
+            continue  # one shared generic path (e.g. /api/v1/) is too weak; a platform shares several
         if common and kind != "file":
             strong.append(f"{label}: {sorted(common)[0]}")
         elif common and kind == "file":

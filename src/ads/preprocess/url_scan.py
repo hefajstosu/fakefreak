@@ -42,6 +42,8 @@ JS_REDIRECT = re.compile(r'(?:window\.|document\.|top\.)?location(?:\.href|\.rep
 TRACKERS = [
     ("meta_pixel", re.compile(r"fbq\(\s*['\"]init['\"]\s*,\s*['\"](\d{6,})['\"]")),
     ("meta_pixel", re.compile(r"facebook\.com/tr/?\?[^\"'\s>]*?\bid=(\d{6,})")),
+    ("meta_pixel", re.compile(r"signals/config/(\d{10,})")),
+    ("meta_pixel", re.compile(r"(?:fb_)?pixel(?:_id)?[\"']?\s*[:=]\s*[\"']?(\d{12,})", re.I)),
     ("google_tag_manager", re.compile(r"\b(GTM-[A-Z0-9]{4,})\b")),
     ("google_tag", re.compile(r"\b((?:G|AW|GT)-[A-Z0-9]{6,})\b")),
     ("google_analytics", re.compile(r"\b(UA-\d{4,}-\d{1,3})\b")),
@@ -52,6 +54,45 @@ ACTION = re.compile(r"""\baction=["']?([^"'\s>]*)""", re.I)
 FIELD = re.compile(r"""<(?:input|select|textarea)\b[^>]*?\bname=["']([^"']+)["']""", re.I)
 ASSET = re.compile(r"""<(?:script[^>]+src|link[^>]+href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']""", re.I)
 TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+
+
+API_PATH = re.compile(r"""["'`](/api/[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){0,4}/?)""")
+MAX_SCRIPTS = 3
+MAX_SCRIPT_BYTES = 1_500_000
+
+
+def extract_api_paths(text: str) -> List[str]:
+    """Platform endpoint paths written literally in HTML/JS, e.g. /api/v1/trigger/field/ (a landing-page
+    platform fingerprint shared by campaigns built on the same tool). Returned as 'api:<path>'."""
+    out = set()
+    for m in API_PATH.finditer(text):
+        p = m.group(1) if m.group(1).endswith("/") else m.group(1) + "/"
+        if p.count("/") >= 3:
+            out.add("api:" + p)
+    return sorted(out)
+
+
+def first_party_script_urls(html: str, base_url: str) -> List[str]:
+    base = harmod.reg_domain(urlsplit(base_url).hostname or "")
+    urls: List[str] = []
+    for src in ASSET.findall(html):
+        u = urljoin(base_url, src)
+        h = urlsplit(u).hostname or ""
+        if urlsplit(u).path.endswith(".js") and harmod.reg_domain(h) == base and not harmod.is_mass(h) and u not in urls:
+            urls.append(u)
+    return urls[:MAX_SCRIPTS]
+
+
+def analyze(html: str, base_url: str, scripts: List[str]) -> Dict[str, List[str]]:
+    """Pure analysis of a page and its first-party scripts (no network): tracker IDs and clues."""
+    blob = [html] + scripts
+    trackers: List[str] = []
+    api: List[str] = []
+    for t in blob:
+        trackers += [i for i in extract_trackers(t) if i not in trackers]
+        api += [i for i in extract_api_paths(t) if i not in api]
+    return {"tracker_ids": trackers,
+            "dom_and_form_clues": extract_forms(html, base_url) + extract_first_party_files(html, base_url) + api}
 
 
 def _blocked(url: str, allow_private: bool) -> Optional[str]:
@@ -107,12 +148,12 @@ def extract_first_party_files(html: str, base_url: str) -> List[str]:
     return out
 
 
-def _read(resp: requests.Response) -> str:
+def _read(resp: requests.Response, limit: int = MAX_BYTES) -> str:
     chunks, size = [], 0
     for chunk in resp.iter_content(65536):
         chunks.append(chunk)
         size += len(chunk)
-        if size >= MAX_BYTES:
+        if size >= limit:
             break
     raw = b"".join(chunks)
     return raw.decode(resp.encoding or resp.apparent_encoding or "utf-8", errors="replace")
@@ -161,11 +202,22 @@ def scan_url(url: str, allow_private: bool = False) -> Dict[str, Any]:
         notes.append(f"HTTP status {status}")
     title = TITLE.search(html)
     pub_chain = [harmod.sanitize_url(u) for u in chain if not harmod.is_mass(urlsplit(u).hostname or "")]
+    scripts: List[str] = []
+    for su in first_party_script_urls(html, cur):  # same safety rules as the page itself
+        if _blocked(su, allow_private):
+            continue
+        try:
+            rr = session.get(su, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False, stream=True)
+            if rr.status_code == 200:
+                scripts.append(_read(rr, MAX_SCRIPT_BYTES))
+        except requests.RequestException:
+            notes.append(f"could not fetch script {su.rsplit('/', 1)[-1][:40]}")
+    found = analyze(html, cur, scripts)
     tech = {
         "urls_and_domains": [harmod.sanitize_url(cur)],
         "redirect_chain": pub_chain,
-        "tracker_ids": extract_trackers(html),
-        "dom_and_form_clues": extract_forms(html, cur) + extract_first_party_files(html, cur),
+        "tracker_ids": found["tracker_ids"],
+        "dom_and_form_clues": found["dom_and_form_clues"],
         "domain_and_cert_metadata": [],
     }
     return {"ok": True, "final_url": cur, "status": status, "title": re.sub(r"\s+", " ", title.group(1)).strip() if title else None,

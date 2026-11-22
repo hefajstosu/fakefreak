@@ -82,8 +82,12 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   similarity (the 47/14/5 health group fails because the ad-template feature is too influential).
 - Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
 - Entity strings are not normalised yet (`tvn24` vs `TVN24`): normalise in similarity, not in profiles.
-- Live URL scan is done (`url_scan.py`: redirect chain, tracker IDs, form endpoints, first-party files; blocks private
-  addresses; does not run JavaScript). The demo uses it for the URL field.
+- Live URL scan is done (`url_scan.py`): redirect chain, tracker IDs (also from config blobs and first-party scripts),
+  form endpoints, first-party files, and platform endpoint paths (`api:/api/v1/...`) read from up to 3 first-party
+  scripts. Blocks private addresses; does NOT run JavaScript, so pixels injected only at runtime are missed.
+  Offline replay on the saved sample pages recovered the same pixel and the same platform endpoints as the recorded
+  logs. Shared platform endpoints prove a shared landing-page tool, not necessarily one operator; similarity needs
+  >=2 shared endpoint prefixes before treating them as evidence. The demo uses the scan for the URL field.
 - Not done: face reference set (DeepFace not installed), image dedup, per-campaign thresholds, ad-library scheduler.
 - The teammates' earlier analysis (entity masking, rarity weighting, per-campaign thresholds, hierarchy) is in git
   history: `git show 8837ebb:analiza_algorytmu.md`.

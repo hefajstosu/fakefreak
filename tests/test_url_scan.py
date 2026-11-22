@@ -47,6 +47,9 @@ class Site(BaseHTTPRequestHandler):
             self._send(302, headers={"Location": "/loop"})
         elif path == "/final":
             self._send(200, FINAL)
+        elif path == "/static/app.7f3a.js":
+            self._send(200, 'var cfg={"fb_pixel":"555566667777888"};'
+                            'fetch("/api/v1/trigger/field/"+id);fetch("/api/v1/agent/persist-session-record/"+id);')
         else:
             self._send(404, "nope")
 
@@ -108,3 +111,22 @@ def test_redirect_loop_is_bounded(base):
 def test_unreachable_host_returns_error_not_exception():
     r = us.scan_url("http://127.0.0.1:9/x", allow_private=True)
     assert r["ok"] is False and "failed" in r["error"]
+
+
+def test_reads_first_party_scripts_for_pixel_and_platform_endpoints(base):
+    t = us.scan_url(base + "/final", allow_private=True)["technical_summary"]
+    assert "meta_pixel:555566667777888" in t["tracker_ids"]            # pixel only present in a config blob inside the script
+    assert "api:/api/v1/trigger/field/" in t["dom_and_form_clues"]
+    assert "api:/api/v1/agent/persist-session-record/" in t["dom_and_form_clues"]
+
+
+def test_pixel_patterns_cover_config_blobs_and_signal_paths():
+    html = 'x "pixel_id":"123456789012345" y connect.facebook.net/signals/config/999888777666555?v=2 z'
+    ids = us.extract_trackers(html)
+    assert "meta_pixel:123456789012345" in ids and "meta_pixel:999888777666555" in ids
+    assert us.extract_trackers("order 123456 items") == []                # short numbers are not pixels
+
+
+def test_api_path_extraction_ignores_non_api_strings():
+    got = us.extract_api_paths("""a('/api/v1/trigger/field/') b("/static/x.js") c(`/api/v1/pwa/manifest`) d('/api/')""")
+    assert got == ["api:/api/v1/pwa/manifest/", "api:/api/v1/trigger/field/"]
