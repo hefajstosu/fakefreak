@@ -64,12 +64,12 @@ def main() -> None:
         db = grow(base, n + 2)
         new, new2 = db.pop(f"c{n:05d}"), db.pop(f"c{n + 1:05d}")
         scores, t_table = timed(lambda: clustering.pair_scores(db))
-        _, t_cluster = timed(lambda: clustering.cluster(db, 0.6, scores))
+        _, t_cluster = timed(lambda: clustering.cluster(db, clustering.TAU, scores))
         analysis.reset()
-        _, t_first = timed(lambda: analysis.compare(new, None, db, 0.6, fingerprints={}))
-        _, t_repeat = timed(lambda: analysis.compare(new2, None, db, 0.6, fingerprints={}))
+        _, t_first = timed(lambda: analysis.compare(new, None, db, clustering.TAU, fingerprints={}))
+        _, t_repeat = timed(lambda: analysis.compare(new2, None, db, clustering.TAU, fingerprints={}))
         db["new"] = new  # the analyst saved it; the next article is compared with N + 1 cases
-        _, t_saved = timed(lambda: analysis.compare(new2, None, db, 0.6, fingerprints={}))
+        _, t_saved = timed(lambda: analysis.compare(new2, None, db, clustering.TAU, fingerprints={}))
         print(f"{n:>6} {n * (n - 1) // 2:>9} {t_table:>8.1f} {t_cluster:>9.2f} {t_first:>14.1f} {t_repeat:>9.2f} "
               f"{t_saved:>12.2f} {peak_mb():>8.0f}", flush=True)
         analysis.reset()

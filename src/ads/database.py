@@ -85,7 +85,7 @@ def save_case(case: Dict[str, Any], profile: Dict[str, Any], dec: Optional[Dict[
     status = (dec or {}).get("status")
     meta: Dict[str, Any] = {"decision": status}
     if status == "duplicate":
-        meta["duplicate_of"] = dec["join"][0]
+        meta["duplicate_of"] = dec["duplicate_of"]
     elif status in ("new_unconfirmed", "suggested_family", "likely"):
         meta["status"] = "unconfirmed"
     for name, data in (("case_input.json", case), ("profile.json", profile), ("meta.json", meta)):

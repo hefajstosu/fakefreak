@@ -6,7 +6,8 @@
     r["missing"]        features that could not be compared (no data on a side)
     r["strong_links"]   shared traces in words (sim_functions/evidence.py); they never change the number
 
-Weights, ignored values and supporting features come from config/cluster.yaml (sim_functions/config.py).
+Weights, ignored values and supporting features come from config/cluster.yaml (sim_functions/config.py);
+compare(a, b) is the full per-feature result behind the score (used by explain/pair.py).
 """
 from typing import Any, Dict
 
@@ -14,9 +15,13 @@ from .sim_functions import compare_all, load_config
 from .sim_functions.evidence import strong_links
 
 
-def score(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+def compare(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     cfg = load_config()
-    res = compare_all(a, b, weights=cfg["weights"], ignore=cfg["ignore"], supporting=cfg["supporting"])
+    return compare_all(a, b, weights=cfg["weights"], ignore=cfg["ignore"], supporting=cfg["supporting"])
+
+
+def score(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    res = compare(a, b)
     feats = res["features"]
     return {"score": res["score"] or 0.0,
             "contributions": {k: f["contribution"] for k, f in feats.items() if f["contribution"] is not None},

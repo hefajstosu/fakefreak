@@ -1,4 +1,4 @@
-"""ads.features on synthetic profiles: the per-feature report must separate a linked pair from unrelated ones."""
+"""ads.evaluation.features on synthetic profiles: the per-feature report must separate a linked pair from unrelated ones."""
 
 from ads.evaluation import features
 from factory import OTHER, make

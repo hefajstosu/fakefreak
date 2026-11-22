@@ -12,10 +12,9 @@ functions and settings as `similarity.score()`, so a pair explanation always add
 
     python -m ads.explain 1 2 [--tau 0.6]   |   python -m ads.explain --campaigns
 """
-from .campaign import campaign, signature
-from .catalog import EVIDENCE_KINDS, FEATURES, GROUPS, evidence_items
+from .campaign import campaign
+from .catalog import evidence_items
 from .joins import assignment, decision_reasons, family_assignment
 from .pair import pair
 
-__all__ = ["campaign", "signature", "EVIDENCE_KINDS", "FEATURES", "GROUPS", "evidence_items", "assignment",
-           "decision_reasons", "family_assignment", "pair"]
+__all__ = ["campaign", "evidence_items", "assignment", "decision_reasons", "family_assignment", "pair"]

@@ -2,8 +2,14 @@
 import copy
 
 from ads import clustering, explain
+from ads.explain.catalog import FEATURES
+from ads.sim_functions import ANCHORS, FEATURES as SIMILARITY_FEATURES
 from ads.similarity import score
 from factory import OTHER, make
+
+
+def test_every_similarity_feature_is_in_the_catalog():
+    assert set(FEATURES) == set(SIMILARITY_FEATURES) | set(ANCHORS)
 
 
 def test_pair_contributions_add_up_to_the_score():

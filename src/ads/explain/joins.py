@@ -1,8 +1,7 @@
 """A new article against the campaigns and families: joined or not, on which rule, and why the verdict."""
 from typing import Any, Dict, List, Sequence, Tuple
 
-from .. import clustering, decision
-from ..sim_functions import get
+from .. import clustering
 from .catalog import evidence_items
 
 
@@ -26,14 +25,13 @@ def assignment(assigned: Dict[str, Any], tau: float, top: int = 6) -> List[Dict[
 
 
 def family_assignment(profile: Dict[str, Any], scores: Dict[str, Dict[str, Any]], families: Sequence[Sequence[str]],
-                      profiles: Dict[str, dict], family_tau: float = decision.FAMILY_SCORE,
+                      profiles: Dict[str, dict], family_tau: float = clustering.FAMILY_SCORE,
                       top: int = 4) -> List[Dict[str, Any]]:
     """Per family: does the new article belong to it by the rule of clustering.hierarchy (same scam type and a score
     >= family_tau, or family-level evidence), and with which cases."""
-    scam = get(profile, "core_narrative.ad_goal_scam_type")
     rows = []
     for fam in families:
-        same = [c for c in fam if get(profiles[c], "core_narrative.ad_goal_scam_type") == scam]
+        same = [c for c in fam if clustering.scam_type(profiles[c]) == clustering.scam_type(profile)]
         by_score = [c for c in same if scores[c]["score"] >= family_tau]
         by_evidence = [c for c in same if clustering.is_family_link(scores[c])]
         best = max(fam, key=lambda c: scores[c]["score"])
@@ -52,6 +50,6 @@ def decision_reasons(dec: Dict[str, Any], neighbours: Sequence[Tuple[str, Dict[s
             "hard_evidence": evidence_items(dec.get("hard_links") or []),
             "family_case": dec.get("family_case"), "family_score": dec.get("family_score"),
             "family_evidence": evidence_items(dec.get("family_links") or []),
-            "thresholds": {"tau": tau, "family": decision.FAMILY_SCORE, "confirm": decision.CONFIRM_SCORE},
+            "thresholds": {"tau": tau, "family": clustering.FAMILY_SCORE, "confirm": clustering.SAME_CONTENT_SCORE},
             "duplicates": [{"case": d["case"], "reasons": d["reasons"]} for d in dec.get("related") or []]
             if dec["status"] in ("duplicate", "same_content") else []}

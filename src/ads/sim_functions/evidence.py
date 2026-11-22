@@ -16,6 +16,14 @@ GENERIC_FILES = {"main.js", "main.css", "style.css", "styles.css", "app.js", "sc
                  "sw.js", "metrics.js", "email-decode.min.js", "utils.js", "slider.js", "video.js"}
 MIN_SHARED_ENDPOINTS = 2  # one shared generic path (/api/v1/) is too weak; a platform shares several
 MIN_SHARED_IMAGES = 2     # one shared picture can be a stock photo; an operator's page kit shares several
+# Every evidence label by kind; a strong_links entry is "<label>: <value>". clustering/evidence.py says which kinds
+# join a campaign or a family, explain/catalog.py shows them.
+LABELS = {
+    "tracker": "shared tracker ID", "endpoint": "shared session/form endpoint",
+    "file": "shared distinctive script/style file", "domain": "shared domain", "adid": "same ad campaign ID",
+    "tracking": "same tracking template", "certificate": "domains on one certificate",
+    "images": "shared page images", "page": "same sponsoring page",
+}
 
 
 def _endpoints(clues) -> set:
@@ -45,26 +53,20 @@ def _traces(p: dict) -> dict:
 def strong_links(a: dict, b: dict) -> List[str]:
     fa, fb = _traces(a), _traces(b)
     common = {k: fa[k] & fb[k] for k in ("tracker", "endpoint", "file", "domain", "tracking", "images")}
-    out = []
-    if common["tracker"]:
-        out.append(f"shared tracker ID: {min(common['tracker'])}")
-    if len(common["endpoint"]) >= MIN_SHARED_ENDPOINTS:
-        out.append(f"shared session/form endpoint: {min(common['endpoint'])}")
-    if common["file"]:
-        out.append(f"shared distinctive script/style file: {min(common['file'])}")
-    if common["domain"]:
-        out.append(f"shared domain: {min(common['domain'])}")
-    ad_ids = sorted(t[6:] for t in common["tracking"] if t.startswith("adid:"))
-    if ad_ids:
-        out.append(f"same ad campaign ID: {ad_ids[0]}")
-    templates = sorted(t[7:] for t in common["tracking"] if t.startswith("params:"))
-    if templates:
-        out.append(f"same tracking template: {templates[0]}")
-    on_cert = (fa["cert_san"] & fb["own_domains"]) | (fb["cert_san"] & fa["own_domains"])
-    if on_cert:
-        out.append(f"domains on one certificate: {min(on_cert)}")
-    if len(common["images"]) >= MIN_SHARED_IMAGES:
-        out.append(f"shared page images: {len(common['images'])} identical image files")
-    if fa["page"] and fa["page"] == fb["page"]:
-        out.append(f"same sponsoring page: {fa['page']}")
-    return out
+    found = [
+        ("tracker", min(common["tracker"]) if common["tracker"] else None),
+        ("endpoint", min(common["endpoint"]) if len(common["endpoint"]) >= MIN_SHARED_ENDPOINTS else None),
+        ("file", min(common["file"]) if common["file"] else None),
+        ("domain", min(common["domain"]) if common["domain"] else None),
+        ("adid", min((t[6:] for t in common["tracking"] if t.startswith("adid:")), default=None)),
+        ("tracking", min((t[7:] for t in common["tracking"] if t.startswith("params:")), default=None)),
+        ("certificate", min((fa["cert_san"] & fb["own_domains"]) | (fb["cert_san"] & fa["own_domains"]), default=None)),
+        ("images", f"{len(common['images'])} identical image files" if len(common["images"]) >= MIN_SHARED_IMAGES else None),
+        ("page", fa["page"] if fa["page"] and fa["page"] == fb["page"] else None),
+    ]
+    return [f"{LABELS[kind]}: {value}" for kind, value in found if value]
+
+
+def kind_of(link: str) -> str:
+    """The kind of one strong_links entry ("other" for an unknown label)."""
+    return next((k for k, label in LABELS.items() if link.startswith(label + ":")), "other")

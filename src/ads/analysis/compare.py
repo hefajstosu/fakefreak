@@ -4,8 +4,6 @@ from typing import Any, Dict, Optional
 from .. import clustering, decision, dedup, explain
 from .index import campaigns, families
 
-CAPTURE_REASONS = ("near-identical image", "same final URL")  # the same capture again (see decision.py)
-
 
 def _fingerprints(profiles: Dict[str, dict], fingerprints: Optional[Dict[str, dict]]) -> Dict[str, dict]:
     fps = fingerprints if fingerprints is not None else dedup.load_fingerprints()
@@ -23,7 +21,7 @@ def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], prof
     hard = [(c, r) for c, r in res["scores"].items() if clustering.is_must_link(r)]
     fam = explain.family_assignment(profile, res["scores"], families(profiles, tau), profiles)
     fam_links = [(c, res["scores"][c]) for row in fam for c in row["evidence_with"]]
-    dec = decision.decide(res["neighbours"], dups, likely=tau, hard=hard, family_links=fam_links)
+    dec = decision.decide(res["neighbours"], dups, tau, hard=hard, family_links=fam_links)
     return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"], "decision": dec,
             "reasons": explain.decision_reasons(dec, res["neighbours"], tau),
             "campaigns": explain.assignment(res, tau), "families": fam,
@@ -37,7 +35,7 @@ def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=
     fps = _fingerprints(profiles, fingerprints)
     fp = dedup.fingerprint(case)
     repeat = next((d["case"] for d in dedup.find_duplicates(fp, fps)
-                   if any(r.startswith(CAPTURE_REASONS) for r in d["reasons"])), None)
+                   if any(r.startswith(dedup.CAPTURE_REASONS) for r in d["reasons"])), None)
     if repeat:
         profile = profiles[repeat]
     else:

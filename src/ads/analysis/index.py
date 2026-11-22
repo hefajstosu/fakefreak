@@ -8,7 +8,7 @@ import json
 from itertools import combinations
 from typing import Any, Dict, List, Tuple
 
-from .. import clustering, decision
+from .. import clustering
 from ..similarity import score
 
 _PAIRS: Dict[Tuple[str, str], Dict[str, Any]] = {}  # (sha a, sha b) -> pair result
@@ -72,9 +72,9 @@ def campaigns(profiles: Dict[str, dict], tau: float) -> List[List[str]]:
 
 
 def families(profiles: Dict[str, dict], tau: float) -> List[List[str]]:
-    """Families of campaigns (clustering.hierarchy at decision.FAMILY_SCORE) as member lists, remembered alike."""
+    """Families of campaigns (clustering.hierarchy at clustering.FAMILY_SCORE) as member lists, remembered alike."""
     def build():
         groups = campaigns(profiles, tau)
-        fams = clustering.hierarchy(profiles, groups, decision.FAMILY_SCORE, pair_table(profiles))
+        fams = clustering.hierarchy(profiles, groups, clustering.FAMILY_SCORE, pair_table(profiles))
         return [sorted(c for i in f for c in groups[i]) for f in fams]
     return _remembered("families", profiles, tau, build)

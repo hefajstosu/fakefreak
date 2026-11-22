@@ -1,9 +1,11 @@
 """The values behind one feature of a pair: what both cases share, what only one has, the texts compared."""
 from typing import Any, Dict, Iterable, Optional, Sequence
 
+from ..preprocess.domain_meta import linking_facts
 from ..sim_functions import attributes as A
 from ..sim_functions.normalize import norm, stem
 from ..sim_functions.primitives import name_similarity
+from ..urls import domains
 
 MATCH = 0.5        # a pair of names counts as shared from this similarity on
 MAX_ITEMS = 12     # values listed per side and feature
@@ -59,11 +61,6 @@ def _text(a: Optional[str], b: Optional[str]) -> Dict[str, Any]:
     return {"a": _clip(a), "b": _clip(b), "shared_words": shared[:MAX_ITEMS * 2]}
 
 
-def _url_tokens(t: Optional[dict]) -> list:
-    t = t or {}
-    return A.url_tokens((t.get("redirect_chain") or []) + (t.get("urls_and_domains") or []))
-
-
 def values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
     """Shown values of one feature for the pair; `kind` comes from catalog.FEATURES."""
     if kind == "enum":
@@ -77,19 +74,19 @@ def values(kind: str, va: Any, vb: Any, ignore: frozenset) -> Dict[str, Any]:
     if kind == "anchor":
         return _sets([x for x in va or [] if x not in ignore], [y for y in vb or [] if y not in ignore])
     if kind == "domains":
-        return _sets(A.domains(va), A.domains(vb))
+        return _sets(domains(va), domains(vb))
     if kind == "people":
         return _greedy(va or [], vb or [], A.person_pair, person)
     if kind == "names":
         return _greedy(va or [], vb or [], name_similarity)
     if kind == "infra":
-        return _sets(A.infra_tokens(va), A.infra_tokens(vb))
+        return _sets(linking_facts(va), linking_facts(vb))
     if kind == "url":
-        return _sets(_url_tokens(va), _url_tokens(vb))
+        return _sets(A.tracking_tokens(va), A.tracking_tokens(vb))
     if kind == "structure":  # page skeletons: how many pages were compared on each side
         return {"pages_a": len((va or {}).get("structure") or []), "pages_b": len((vb or {}).get("structure") or [])}
     if kind == "images":     # page image kits: counts only, hashes mean nothing to a reader
-        ia, ib = set((va or {}).get("images") or []), set((vb or {}).get("images") or [])
+        ia, ib = set(va or []), set(vb or [])
         return {"shared_count": len(ia & ib), "images_a": len(ia), "images_b": len(ib)}
     if kind == "amounts":
         va, vb = va or {}, vb or {}

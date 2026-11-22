@@ -3,10 +3,18 @@ import argparse
 import sys
 from typing import Any, Dict
 
-from ..analysis import campaigns, pair_table
+from .. import clustering
 from ..database import load_profiles, require_profiles
 from .campaign import campaign
 from .pair import pair
+
+
+def _shared(v: Dict[str, Any]) -> str:
+    if "shared_words" in v:
+        return ", ".join(v["shared_words"][:8])
+    if "shared" in v:
+        return ", ".join(m["a"] if m["a"] == m["b"] else f"{m['a']} ~ {m['b']}" for m in v["shared"])
+    return f"{v.get('a')} | {v.get('b')}"
 
 
 def format_pair(ex: Dict[str, Any], ida: str, idb: str) -> str:
@@ -25,17 +33,14 @@ def format_pair(ex: Dict[str, Any], ida: str, idb: str) -> str:
             if f["missing"]:
                 lines.append(f"    {f['feature']:<24} not comparable (no data: {f['missing']})")
             continue
-        shared = ", ".join(v["shared_words"][:8]) if "shared_words" in v else \
-            ", ".join(m["a"] if m["a"] == m["b"] else f"{m['a']} ~ {m['b']}" for m in v["shared"]) if "shared" in v else \
-            f"{v.get('a')} | {v.get('b')}"
-        lines.append(f"    {f['feature']:<24} {f['contribution']:>5.2f} {f['similarity']:>5.2f}  {shared[:90]}")
+        lines.append(f"    {f['feature']:<24} {f['contribution']:>5.2f} {f['similarity']:>5.2f}  {_shared(v)[:90]}")
     return "\n".join(lines)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Explain why cases are linked")
     ap.add_argument("cases", nargs="*", help="two case ids")
-    ap.add_argument("--tau", type=float, default=0.6)
+    ap.add_argument("--tau", type=float, default=clustering.TAU)
     ap.add_argument("--campaigns", action="store_true", help="explain every campaign at tau")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -45,7 +50,8 @@ def main() -> None:
             sys.exit(f"give two case ids from: {', '.join(sorted(profiles))}")
         print(format_pair(pair(profiles[a.cases[0]], profiles[a.cases[1]], a.tau), *a.cases))
         return
-    scores, groups = pair_table(profiles), campaigns(profiles, a.tau)
+    scores = clustering.pair_scores(profiles)
+    groups = clustering.cluster(profiles, a.tau, scores)
     for i, g in enumerate(groups, 1):
         ex = campaign(g, profiles, scores, a.tau, groups)
         cohesion = f"  cohesion min {ex['cohesion']['min']:.2f} mean {ex['cohesion']['mean']:.2f}" if ex["cohesion"] else ""

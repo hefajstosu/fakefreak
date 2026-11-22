@@ -20,10 +20,10 @@ import os
 from typing import Callable, Dict, List, Optional
 
 from ..clustering import pair_scores
-from ..database import load_profiles, require_profiles
+from ..database import case_ids, load_profiles, require_profiles
 from ..paths import CASES, gold_file
 from ..similarity import score
-from .gold import BROAD, STRICT, auc, gold_pairs, labelled, load_gold, partners
+from .gold import BROAD, STRICT, auc, gold_pairs, labelled, load_gold, mean, partners, ranking
 
 
 def _infra(p):
@@ -67,10 +67,12 @@ def _props_amounts(p):
     p["entities"]["amounts_dates_locations"] = {"amounts": [], "dates": [], "locations": []}
 
 
+INFRA = "infrastructure (trackers, endpoints, domains, files, page images, sender page)"
+TEMPLATES = "templates (ad + landing page, page structure)"
 GROUPS: Dict[str, Callable] = {
-    "infrastructure (trackers, endpoints, domains, files, page images, sender page)": _infra,
+    INFRA: _infra,
     "text (summary, narrative, promise, CTA)": _text,
-    "templates (ad + landing page, page structure)": _templates,
+    TEMPLATES: _templates,
     "scam type + topic": _scam_topic,
     "entities (product, people, companies, media)": _entities,
     "persuasion devices": _persuasion,
@@ -85,7 +87,6 @@ def mask_profile(p: dict, groups: List[str]) -> dict:
     return q
 
 
-
 def metrics(profiles: Dict[str, dict], gold: dict, tau: float) -> dict:
     profiles = labelled(profiles, gold)
     scores = pair_scores(profiles)
@@ -94,10 +95,9 @@ def metrics(profiles: Dict[str, dict], gold: dict, tau: float) -> dict:
     neg = [r["score"] for p, r in scores.items() if p not in broad]
     pred = {p for p, r in scores.items() if r["score"] >= tau}
     tp_b = len(pred & broad)
-    triples = [t for t in gold["ranking_triples"] if {t["anchor"], t["closer"], t["farther"]} <= set(profiles)]
-    sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
-    return {"auc": auc(pos, neg), "pos": sum(pos) / len(pos), "neg": sum(neg) / len(neg),
-            "triples": f"{sum(sc(t['anchor'], t['closer']) > sc(t['anchor'], t['farther']) for t in triples)}/{len(triples)}",
+    triples = ranking(gold, scores, profiles)
+    return {"auc": auc(pos, neg), "pos": mean(pos), "neg": mean(neg),
+            "triples": f"{sum(c > f for _, c, f in triples)}/{len(triples)}",
             "strict_recall": len(pred & strict) / len(strict) if strict else float("nan"),
             "broad_precision": tp_b / len(pred) if pred else 1.0, "broad_recall": tp_b / len(broad) if broad else float("nan")}
 
@@ -121,8 +121,8 @@ def degradation(profiles, gold, tau):
     strict, broad = gold_pairs(gold, STRICT), gold_pairs(gold, BROAD)
     scenarios = {
         "full (baseline)": lambda x, p: p,
-        "masked: no technical traces": lambda x, p: mask_profile(p, [list(GROUPS)[0]]),
-        "masked: no templates": lambda x, p: mask_profile(p, [list(GROUPS)[2]]),
+        "masked: no technical traces": lambda x, p: mask_profile(p, [INFRA]),
+        "masked: no templates": lambda x, p: mask_profile(p, [TEMPLATES]),
         "real: ad creative only": lambda x, p: load_real_degraded(x, "ad_only"),
         "real: pages + logs only": lambda x, p: load_real_degraded(x, "page_only"),
     }
@@ -142,23 +142,20 @@ def degradation(profiles, gold, tau):
             rec += sum(s[y] >= tau for y in sp) / len(sp)
             fj += sum(s[y] >= tau for y in others if y not in bp)
             top1 += max(s, key=s.get) in bp
-        out.append((name, {"cases": n, "mean_partner_score": sum(means) / n if n else float("nan"),
+        out.append((name, {"cases": n, "mean_partner_score": mean(means),
                            "partner_recall": rec / n if n else float("nan"),
                            "false_joins_per_case": fj / n if n else float("nan"),
                            "top1_is_partner": top1 / n if n else float("nan")}))
     return out
 
 
-def make_degraded(model: str, cases: Optional[List[str]] = None) -> None:
+def make_degraded(model: str) -> None:
     """Re-extract reduced inputs through the LLM (one call per case and scenario)."""
     from ..llm.client import make_client
     from ..llm.extract import extract
     client = make_client(extraction_model=model)
-    for cid in cases or sorted(os.listdir(CASES)):
-        f = os.path.join(CASES, cid, "case_input.json")
-        if not os.path.exists(f):
-            continue
-        case = json.load(open(f, encoding="utf-8"))
+    for cid in case_ids("case_input.json"):
+        case = json.load(open(os.path.join(CASES, cid, "case_input.json"), encoding="utf-8"))
         roles = {p["role"] for p in case["parts"]}
         if "ad_creative" not in roles or roles == {"ad_creative"}:
             continue  # needs both an ad and at least one page to make two different reduced inputs

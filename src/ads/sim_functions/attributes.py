@@ -3,9 +3,7 @@ page fingerprints). Each takes the two raw values from the profiles and returns 
 import re
 from typing import List
 
-from ..preprocess.domain_meta import linking_facts
 from ..preprocess.page_fp import sketch_similarity
-from ..urls import domains  # noqa: F401 (part of this module's API: domains of a URL list)
 from .normalize import norm, parse_amount
 from .primitives import Score, best_assignment, name_similarity, numeric_similarity, set_similarity
 
@@ -108,12 +106,6 @@ def url_tokens(urls) -> List[str]:
 def tracking_tokens(technical: dict) -> List[str]:
     t = technical or {}
     return url_tokens((t.get("redirect_chain") or []) + (t.get("urls_and_domains") or []))
-
-
-def infra_tokens(facts) -> List[str]:
-    """Domain facts that can link two cases (preprocess/domain_meta.py): registration batch, non-mass name servers
-    and hosting network, certificate neighbours. Registrar, country and dates describe but link nothing."""
-    return linking_facts(facts or [])
 
 
 def anchor_similarity(a, b, ignore: frozenset = frozenset()) -> Score:

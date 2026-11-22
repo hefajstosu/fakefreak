@@ -6,6 +6,8 @@ config/cluster.yaml (config.py); a feature of weight 0 is computed and explained
 """
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from ..preprocess.domain_meta import linking_facts
+from ..urls import domains
 from . import attributes as A
 from .primitives import closed_set, exact, set_similarity, text_similarity
 
@@ -31,17 +33,19 @@ FEATURES: Dict[str, Tuple[Callable, str]] = {
     "page_structure": (A.page_structure, "technical_artifacts.page_fingerprints"),
     "ad_library_page_name": (A.page_name, "technical_artifacts.ad_library_metadata.page_id_or_name"),
 }
+
+
 def _values(x) -> list:
     return list(x or [])
 
 
 ANCHORS: Dict[str, Tuple[Callable, str]] = {
     "tracker_ids": (_values, "technical_artifacts.tracker_ids"),
-    "redirect_chain_domains": (A.domains, "technical_artifacts.redirect_chain"),
+    "redirect_chain_domains": (domains, "technical_artifacts.redirect_chain"),
     "dom_and_form_clues": (_values, "technical_artifacts.dom_and_form_clues"),
     "page_assets": (_values, "technical_artifacts.page_fingerprints.images"),
     "url_template": (A.tracking_tokens, "technical_artifacts"),
-    "infra_metadata": (A.infra_tokens, "technical_artifacts.domain_and_cert_metadata"),
+    "infra_metadata": (linking_facts, "technical_artifacts.domain_and_cert_metadata"),  # facts that can link
 }
 # First weights (the file config/cluster.yaml overrides them). Same-weight choices are by analogy, not fitted.
 DEFAULT_WEIGHTS: Dict[str, float] = {

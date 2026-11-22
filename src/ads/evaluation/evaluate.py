@@ -10,27 +10,22 @@ import argparse
 import os
 from typing import Dict, Optional
 
-from ..clustering import cluster, hierarchy, load_variants, pair_scores
+from ..clustering import FAMILY_SCORE, TAU, cluster, hierarchy, load_variants, pair_scores
 from ..database import load_profiles, require_profiles
-from ..decision import FAMILY_SCORE
 from ..paths import gold_file
-from .gold import BROAD, STRICT, gold_pairs, group_pairs, labelled, load_gold, prf
+from .gold import BROAD, STRICT, gold_pairs, group_pairs, labelled, load_gold, mean, prf, ranking
 
 
 def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores: Optional[dict] = None) -> dict:
     profiles = labelled(profiles, gold)
     scores = {k: v for k, v in (scores or pair_scores(profiles)).items() if k[0] in profiles and k[1] in profiles}
-    sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
-    triples = [(t, sc(t["anchor"], t["closer"]), sc(t["anchor"], t["farther"])) for t in gold["ranking_triples"]
-               if {t["anchor"], t["closer"], t["farther"]} <= set(profiles)]
     strict, broad = gold_pairs(gold, STRICT), gold_pairs(gold, BROAD)
     groups = cluster(profiles, tau, scores)
     families = [sorted(c for i in f for c in groups[i]) for f in hierarchy(profiles, groups, FAMILY_SCORE, scores)]
     pos = [scores[p]["score"] for p in strict if p in scores]
     neg = [r["score"] for p, r in scores.items() if p not in broad]
-    return {"triples": [(t, c, f, c > f) for t, c, f in triples],
-            "mean_strict_positive": sum(pos) / len(pos) if pos else None,
-            "mean_negative": sum(neg) / len(neg) if neg else None,
+    return {"triples": [(t, c, f, c > f) for t, c, f in ranking(gold, scores, profiles)],
+            "mean_strict_positive": mean(pos), "mean_negative": mean(neg),
             "groups": groups, "families": families,
             "strict": prf(group_pairs(groups), strict), "broad": prf(group_pairs(groups), broad),
             "family_broad": prf(group_pairs(families), broad)}
@@ -38,7 +33,7 @@ def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores: Optional
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--tau", type=float, default=0.6)
+    ap.add_argument("--tau", type=float, default=TAU)
     ap.add_argument("--gold", default=gold_file(), help="gold labels (default: the local detailed file if present)")
     ap.add_argument("--matrix", action="store_true", help="also print the score of every pair")
     ap.add_argument("--variants", action="store_true", help="synthetic variants as extra comparisons (never grouped)")

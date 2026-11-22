@@ -4,7 +4,7 @@ Levels: strict = same campaign or same template; broad = strict or same scheme (
 """
 import json
 from itertools import combinations
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from ..paths import gold_file
 
@@ -44,6 +44,18 @@ def prf(pred: Set[Pair], truth: Set[Pair]) -> Tuple[float, float, float]:
     p = tp / len(pred) if pred else 1.0
     r = tp / len(truth) if truth else 1.0
     return p, r, (2 * p * r / (p + r) if p + r else 0.0)
+
+
+def mean(xs: List[float], empty: Optional[float] = float("nan")) -> Optional[float]:
+    return sum(xs) / len(xs) if xs else empty
+
+
+def ranking(gold: dict, scores: Dict[Pair, Dict[str, Any]], ids: Iterable[str]) -> List[Tuple[dict, float, float]]:
+    """(triple, score(anchor, closer), score(anchor, farther)) for every ranking constraint among `ids`."""
+    ids = set(ids)
+    sc = lambda a, b: scores[tuple(sorted((a, b)))]["score"]  # noqa: E731
+    return [(t, sc(t["anchor"], t["closer"]), sc(t["anchor"], t["farther"])) for t in gold["ranking_triples"]
+            if {t["anchor"], t["closer"], t["farther"]} <= ids]
 
 
 def auc(pos: List[float], neg: List[float]) -> float:

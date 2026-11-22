@@ -12,7 +12,7 @@ import argparse
 from ..clustering import best_score, load_variants
 from ..database import load_profiles, require_profiles
 from ..similarity import score
-from .gold import BROAD, STRICT, gold_pairs, labelled, load_gold, partners
+from .gold import BROAD, STRICT, gold_pairs, labelled, load_gold, mean, partners
 
 DEMO_SLOT = "non_grouping_attributes.unidentified_people_demographics"
 
@@ -37,7 +37,7 @@ def run(profiles, variants, gold):
 def summarize(rows, taus):
     out = {}
     for cond, rs in rows.items():
-        o = {"rank_acc": sum(r["rank_acc"] for r in rs if r["rank_acc"] is not None) / len(rs)}
+        o = {"rank_acc": mean([r["rank_acc"] for r in rs if r["rank_acc"] is not None])}
         for t in taus:
             o[f"recall@{t}"] = sum(sum(r["sc"][p] >= t for p in r["sp"]) / len(r["sp"]) for r in rs) / len(rs)
             o[f"false_joins@{t}"] = sum(sum(r["sc"][n] >= t for n in r["neg"]) for r in rs) / len(rs)

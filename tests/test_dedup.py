@@ -74,19 +74,20 @@ def test_decision_statuses():
     assert decide(n(0.4), [])["status"] == "suggested_family"
     assert decide(n(0.1), [])["status"] == "new_unconfirmed"
     assert decide([], [])["status"] == "new_unconfirmed"
-    assert decide(n(0.4), [], likely=0.35)["status"] == "likely"        # the slider threshold moves the boundary
+    assert decide(n(0.4), [], tau=0.35)["status"] == "likely"        # the slider threshold moves the boundary
 
 
 def test_must_link_evidence_confirms_whatever_the_score_and_every_result_names_its_rule():
     low = [("c1", R(0.2))]
-    d = decide(low, [], likely=0.6, hard=[("c7", R(0.15, ["shared tracker ID: x"]))])
+    d = decide(low, [], hard=[("c7", R(0.15, ["shared tracker ID: x"]))])
     assert d["status"] == "confirmed" and d["rule"] == "hard_evidence" and d["hard_case"] == "c7"
     assert d["hard_links"] == ["shared tracker ID: x"]
-    assert decide(low, [], likely=0.6)["rule"] == "nothing"
+    assert decide(low, [])["rule"] == "nothing"
     assert decide([("c1", R(0.85))], [])["rule"] == "score_confirm"
-    assert decide([("c1", R(0.6, ["shared domain: d.test"]))], [], likely=0.6)["rule"] == "tau_and_evidence"
+    assert decide([("c1", R(0.6, ["shared tracker ID: x"]))], [])["rule"] == "tau_and_evidence"
+    assert decide([("c1", R(0.6, ["shared domain: d.test"]))], [])["rule"] == "tau_only"  # supporting evidence only
 
 
 def test_family_evidence_suggests_the_family_and_names_the_case():
-    d = decide([("c1", R(0.2))], [], likely=0.6, family_links=[("c4", R(0.25, ["shared session/form endpoint: POST */a/"]))])
+    d = decide([("c1", R(0.2))], [], family_links=[("c4", R(0.25, ["shared session/form endpoint: POST */a/"]))])
     assert d["status"] == "suggested_family" and d["rule"] == "family_evidence" and d["family_case"] == "c4"

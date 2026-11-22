@@ -3,7 +3,7 @@ from collections import Counter
 from itertools import combinations
 from typing import Any, Dict, List
 
-from .. import clustering, database, decision, explain
+from .. import clustering, database, explain
 from ..urls import host, reg_domain
 from .index import campaigns, pair_table
 
@@ -14,7 +14,7 @@ def groups_overview(profiles: Dict[str, dict], tau: float) -> List[Dict[str, Any
     scores = pair_table(profiles)
     groups = campaigns(profiles, tau)
     out = []
-    for fam_no, family in enumerate(clustering.hierarchy(profiles, groups, decision.FAMILY_SCORE, scores), 1):
+    for fam_no, family in enumerate(clustering.hierarchy(profiles, groups, clustering.FAMILY_SCORE, scores), 1):
         for ci in family:
             members = groups[ci]
             links = [{"a": a, "b": b, "score": clustering.pair(scores, a, b)["score"],

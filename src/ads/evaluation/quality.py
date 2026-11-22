@@ -24,21 +24,24 @@ from collections import Counter
 from typing import Dict, List, Optional, Set
 
 from ..analysis import compare
-from ..clustering import load_variants
+from ..clustering import FAMILY_SCORE, TAU, load_variants
 from ..database import load_profiles, require_profiles
-from .gold import BROAD, STRICT, gold_pairs, labelled, load_gold, partners
+from ..schema import empty_tech
+from .gold import BROAD, STRICT, gold_pairs, labelled, load_gold, mean, partners
 
-SHORT = {"leave-one-out (real cases)": "LOO", "variants, parent known, same infrastructure": "known+same",
-         "variants, parent known, new infrastructure": "known+new", "variants, parent held out, same infrastructure":
-         "held+same", "variants, parent held out, new infrastructure": "held+new"}
+LOO = "leave-one-out (real cases)"
+# the variant tests: (name, short name in --sweep, parent in the database, parent's technical traces kept)
+VARIANT_TESTS = [(f"variants, parent {'known' if known else 'held out'}, {'same' if infra else 'new'} infrastructure",
+                  f"{'known' if known else 'held'}+{'same' if infra else 'new'}", known, infra)
+                 for known in (True, False) for infra in (True, False)]
+SHORT = {LOO: "LOO", **{name: short for name, short, _, _ in VARIANT_TESTS}}
 MUST_NOT_LINK = "must-not-link (all items that should stay new)"
 
 
 def strip_infrastructure(p: dict) -> dict:
     """The profile as if the same content had been published on new infrastructure (no traces in common)."""
     q = copy.deepcopy(p)
-    q["technical_artifacts"] = {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [], "dom_and_form_clues": [],
-                                "domain_and_cert_metadata": [], "ad_library_metadata": {}}
+    q["technical_artifacts"] = {**empty_tech(), "ad_library_metadata": {}}
     return q
 
 
@@ -65,10 +68,6 @@ def _share(rows: List[dict], kind: str) -> float:
     return sum(r["outcome"] == kind for r in rows) / len(rows) if rows else float("nan")
 
 
-def _mean(xs: List[float]) -> float:
-    return sum(xs) / len(xs) if xs else float("nan")
-
-
 def summarise(rows: List[dict]) -> Dict[str, object]:
     n = len(rows) or 1
     count = Counter(r["outcome"] for r in rows)
@@ -79,7 +78,7 @@ def summarise(rows: List[dict]) -> Dict[str, object]:
         "join_recall": _share(should_join, "correct"), "stay_new_correct": _share(should_stay, "correct"),
         "family_accuracy": sum(r["family_outcome"] == "correct" for r in rows) / n,
         "family_false_join_rate": sum(r["family_outcome"] == "false join" for r in rows) / n,
-        "purity": _mean([r["purity"] for r in rows if r["purity"] is not None]),
+        "purity": mean([r["purity"] for r in rows if r["purity"] is not None]),
         "n_should_join": len(should_join), "n_should_stay": len(should_stay),
         "statuses": dict(Counter(r["status"] for r in rows)),
     }
@@ -116,13 +115,10 @@ def run(tau: float, profiles: Optional[Dict[str, dict]] = None, gold: Optional[d
     gold = gold if gold is not None else load_gold()
     profiles = labelled(profiles if profiles is not None else require_profiles(load_profiles()), gold)
     variants = variants if variants is not None else load_variants(profiles)
-    report = {"leave-one-out (real cases)": summarise(leave_one_out(profiles, gold, tau))}
+    report = {LOO: summarise(leave_one_out(profiles, gold, tau))}
     if variants:
-        for known in (True, False):
-            for infra in (True, False):
-                name = (f"variants, parent {'known' if known else 'held out'}, "
-                        f"{'same infrastructure' if infra else 'new infrastructure'}")
-                report[name] = summarise(variant_test(profiles, variants, gold, tau, known, infra))
+        for name, _, known, infra in VARIANT_TESTS:
+            report[name] = summarise(variant_test(profiles, variants, gold, tau, known, infra))
     stay = [r for r in report.values() if r["n_should_stay"]]
     n_stay = sum(r["n_should_stay"] for r in stay)
     report[MUST_NOT_LINK] = {"n": n_stay, "stay_new_correct":
@@ -146,7 +142,7 @@ def sweep(taus, profiles=None, gold=None, variants=None) -> List[Dict[str, objec
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Grouping quality on new material: leave-one-out, variants, must-not-link")
-    ap.add_argument("--tau", type=float, default=0.6)
+    ap.add_argument("--tau", type=float, default=TAU)
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
     ap.add_argument("--sweep", action="store_true", help="the tests for tau 0.30 .. 0.80 (correct / false joins)")
     a = ap.parse_args()
@@ -178,8 +174,8 @@ def main() -> None:
     print("\nacc = correct outcome; join rec = share of items with a known campaign that joined it; false join = joined a "
           "campaign with no gold relation (same scheme counts as related); purity = share of the joined cases that are the "
           "same campaign or template in gold (same scheme counts as wrong here); stay new = items without a known "
-          "campaign left as new. families: the same at the second level (same scam type and score >= 0.30 or "
-          "shared platform endpoints), judged against the broad gold.")
+          f"campaign left as new. families: the same at the second level (same scam type and score >= {FAMILY_SCORE:.2f} "
+          "or family evidence: shared tool, page kit or tracking template), judged against the broad gold.")
 
 
 if __name__ == "__main__":

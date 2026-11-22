@@ -4,7 +4,7 @@ import threading
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import analysis, clustering, database, decision, explain
+from .. import analysis, clustering, database, explain
 from ..llm.client import make_client
 from . import uploads
 
@@ -82,7 +82,7 @@ def graph(state: State, tau: float) -> Dict[str, Any]:
     keep = {k for k, r in table.items() if r["strong_links"]}
     near: Dict[str, list] = {}
     for k, r in table.items():
-        if r["score"] >= decision.FAMILY_SCORE:
+        if r["score"] >= clustering.FAMILY_SCORE:
             for c in k:
                 near.setdefault(c, []).append((r["score"], k))
     for links in near.values():
@@ -90,7 +90,7 @@ def graph(state: State, tau: float) -> Dict[str, Any]:
     edges = [{"a": a, "b": b, "score": table[(a, b)]["score"], "evidence": table[(a, b)]["strong_links"],
               "must_link": clustering.is_must_link(table[(a, b)]), "family_link": clustering.is_family_link(table[(a, b)]),
               "same_campaign": where[a][0] == where[b][0]} for a, b in sorted(keep)]
-    return {"tau": tau, "family_score": decision.FAMILY_SCORE, "nodes": nodes, "edges": edges}
+    return {"tau": tau, "family_score": clustering.FAMILY_SCORE, "nodes": nodes, "edges": edges}
 
 
 def explain_pair(state: State, q: Dict[str, str]) -> Dict[str, Any]:

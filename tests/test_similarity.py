@@ -1,7 +1,6 @@
 """ads.similarity on synthetic profiles: score, missing data, evidence."""
 import copy
 
-from ads import clustering as clu
 from ads.similarity import score
 from factory import make
 
@@ -29,15 +28,6 @@ def test_missing_features_are_skipped_not_counted_as_zero():
     a["visual_and_production"]["landing_page_template"] = None
     r = score(a, b)
     assert "landing_page_template" in r["missing"] and r["score"] > 0.95
-
-
-def test_cluster_groups_similar_and_leaves_outsider():
-    db = {"a": make(), "b": make(), "c": make(scam="miracle_cure", topic="health", product="PillX", text="cure capsule doctor")}
-    groups = clu.cluster(db, 0.6)
-    assert ["a", "b"] in groups and ["c"] in groups
-    res = clu.assign(make(), db, 0.6)
-    assert res["joins"] == [["a", "b"]] and not res["is_new_group"]
-    assert clu.assign(make(scam="fake_online_casino", topic="gambling", product="Zed", text="slot spin bonus"), db, 0.6)["is_new_group"]
 
 
 def test_scanned_endpoint_paths_match_recorded_post_endpoints():

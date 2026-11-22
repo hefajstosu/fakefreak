@@ -15,17 +15,19 @@ import hashlib
 import json
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
 
-from .paths import CACHE as CACHE_DIR, CASES, DATA
+from .database import case_ids
+from .paths import CACHE, CASES, DATA
 
-CACHE = os.path.join(CACHE_DIR, "fingerprints.json")
+FINGERPRINTS_FILE = os.path.join(CACHE, "fingerprints.json")
 IMAGE_MAX_DISTANCE = 6      # of 64 bits
 TEXT_NEAR_DUP = 0.90
 SKETCH_K = 256
+CAPTURE_REASONS = ("near-identical image", "same final URL")  # the same capture again, not only the same content
 
 
 def dhash(path: str, size: int = 8) -> int:
@@ -63,14 +65,14 @@ def sketch_jaccard(a: List[int], b: List[int]) -> float:
         return 0.0
     union = sorted(set(a) | set(b))[:min(len(a), len(b), SKETCH_K)]
     sa, sb = set(a), set(b)
-    return sum(1 for h in union if h in sa and h in sb) / len(union) if union else 0.0
+    return sum(1 for h in union if h in sa and h in sb) / len(union)
 
 
-def fingerprint(case: Dict[str, Any], data_dir: str = DATA) -> Dict[str, Any]:
+def fingerprint(case: Dict[str, Any]) -> Dict[str, Any]:
     imgs, texts = [], []
     for p in case["parts"]:
         for im in p.get("images", []):
-            path = im if os.path.isabs(im) else os.path.join(data_dir, im)
+            path = im if os.path.isabs(im) else os.path.join(DATA, im)
             if os.path.exists(path):
                 try:
                     imgs.append({"file": os.path.basename(im), "dhash": f"{dhash(path):016x}", "role": p["role"]})
@@ -83,31 +85,29 @@ def fingerprint(case: Dict[str, Any], data_dir: str = DATA) -> Dict[str, Any]:
     return {"images": imgs, "texts": texts, "urls": urls}
 
 
+def _image_match(fp: Dict[str, Any], o: Dict[str, Any]) -> Optional[str]:
+    for a in fp["images"]:
+        for b in o["images"]:
+            d = hamming(int(a["dhash"], 16), int(b["dhash"], 16))
+            if d <= IMAGE_MAX_DISTANCE:
+                return f"near-identical image ({d}/64 bits differ)"
+    return None
+
+
+def _text_match(fp: Dict[str, Any], o: Dict[str, Any]) -> Optional[str]:
+    for a in fp["texts"]:
+        for b in o["texts"]:
+            if a["hash"] == b["hash"]:
+                return "identical page text"
+            if sketch_jaccard(a["sketch"], b["sketch"]) >= TEXT_NEAR_DUP:
+                return "near-identical page text"
+    return None
+
+
 def find_duplicates(fp: Dict[str, Any], others: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
     for cid, o in others.items():
-        reasons = []
-        for a in fp["images"]:
-            for b in o["images"]:
-                d = hamming(int(a["dhash"], 16), int(b["dhash"], 16))
-                if d <= IMAGE_MAX_DISTANCE:
-                    reasons.append(f"near-identical image ({d}/64 bits differ)")
-                    break
-            else:
-                continue
-            break
-        for a in fp["texts"]:
-            for b in o["texts"]:
-                if a["hash"] == b["hash"]:
-                    reasons.append("identical page text")
-                elif sketch_jaccard(a["sketch"], b["sketch"]) >= TEXT_NEAR_DUP:
-                    reasons.append("near-identical page text")
-                else:
-                    continue
-                break
-            else:
-                continue
-            break
+        reasons = [r for r in (_image_match(fp, o), _text_match(fp, o)) if r]
         if fp["urls"] and fp["urls"] == o["urls"]:
             reasons.append("same final URL")
         if reasons:
@@ -115,20 +115,17 @@ def find_duplicates(fp: Dict[str, Any], others: Dict[str, Dict[str, Any]]) -> Li
     return out
 
 
-def load_fingerprints(cases_dir: str = None) -> Dict[str, Dict[str, Any]]:
+def load_fingerprints() -> Dict[str, Dict[str, Any]]:
     """Fingerprints of all cases that have a case_input.json (cached on disk, keyed by file mtime)."""
-    cases_dir = cases_dir or CASES
     cache: Dict[str, Any] = {}
-    if os.path.exists(CACHE):
+    if os.path.exists(FINGERPRINTS_FILE):
         try:
-            cache = json.load(open(CACHE, encoding="utf-8"))
+            cache = json.load(open(FINGERPRINTS_FILE, encoding="utf-8"))
         except ValueError:
             cache = {}
     out, dirty = {}, False
-    for cid in sorted(os.listdir(cases_dir)):
-        f = os.path.join(cases_dir, cid, "case_input.json")
-        if not os.path.exists(f):
-            continue
+    for cid in case_ids("case_input.json"):
+        f = os.path.join(CASES, cid, "case_input.json")
         stamp = os.path.getmtime(f)
         if cache.get(cid, {}).get("stamp") == stamp:
             out[cid] = cache[cid]["fp"]
@@ -137,6 +134,7 @@ def load_fingerprints(cases_dir: str = None) -> Dict[str, Dict[str, Any]]:
         cache[cid] = {"stamp": stamp, "fp": out[cid]}
         dirty = True
     if dirty:
-        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-        json.dump(cache, open(CACHE, "w", encoding="utf-8"))
+        os.makedirs(CACHE, exist_ok=True)
+        with open(FINGERPRINTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
     return out

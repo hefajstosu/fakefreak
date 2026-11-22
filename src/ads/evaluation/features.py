@@ -17,17 +17,13 @@ import argparse
 import json
 import sys
 from itertools import combinations
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from ..database import load_profiles, require_profiles
 from ..sim_functions import feature_vector, load_config
-from .gold import BROAD, STRICT, auc, gold_pairs, labelled, load_gold
+from .gold import BROAD, STRICT, auc, gold_pairs, labelled, load_gold, mean
 
 FALSE_HIT = 0.5
-
-
-def _mean(xs: List[float]) -> Optional[float]:
-    return sum(xs) / len(xs) if xs else None
 
 
 def feature_table(profiles: Dict[str, dict], gold: dict) -> List[Dict[str, object]]:
@@ -49,7 +45,7 @@ def feature_table(profiles: Dict[str, dict], gold: dict) -> List[Dict[str, objec
             "feature": f, "weight": cfg["weights"].get(f, 0.0),
             "coverage": sum(f in present[c] for c in ids) / len(ids) if ids else 0.0,
             "comparable": len(vals) / len(pairs) if pairs else 0.0,
-            "strict": _mean(s), "broad_only": _mean(b), "unrelated": _mean(u),
+            "strict": mean(s, None), "broad_only": mean(b, None), "unrelated": mean(u, None),
             "auc": auc(s, u) if s and u else None,
             "false_hits": sum(x >= FALSE_HIT for x in u), "n_unrelated": len(u), "n_strict": len(s),
         })

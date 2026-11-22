@@ -32,8 +32,8 @@ def test_cluster_and_assign_on_profiles():
     db = {"a": make(), "b": make(), "c": make(**OTHER)}
     assert cl.cluster(db, 0.6) == [["a", "b"], ["c"]]
     res = cl.assign(make(), db, 0.6)
-    assert res["joins"] == [["a", "b"]] and not res["is_new_group"]
-    assert cl.assign(make(scam="fake_online_casino", topic="gambling", product="Zed", text="slot spin bonus"), db, 0.6)["is_new_group"]
+    assert res["joins"] == [["a", "b"]]
+    assert not cl.assign(make(scam="fake_online_casino", topic="gambling", product="Zed", text="slot spin bonus"), db, 0.6)["joins"]
 
 
 def test_hierarchy_links_same_scam_type_campaigns_only():

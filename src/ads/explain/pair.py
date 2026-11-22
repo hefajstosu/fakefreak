@@ -1,9 +1,9 @@
 """Why two cases score what they do."""
 from typing import Any, Dict, Optional
 
-from ..sim_functions import compare_all, load_config
-from ..sim_functions import get
+from ..sim_functions import get, load_config
 from ..sim_functions.evidence import strong_links
+from ..similarity import compare
 from .catalog import FEATURES, GROUPS, evidence_items
 from .values import empty, values
 
@@ -14,12 +14,12 @@ def pair(a: Dict[str, Any], b: Dict[str, Any], tau: Optional[float] = None) -> D
     (renormalised, like missing data) and, with `tau`, `crosses_tau` says whether that moves the pair across it.
     `missing` says on which side a skipped feature had no data; `informative` marks weight-0 features."""
     cfg = load_config()
-    res = compare_all(a, b, weights=cfg["weights"], ignore=cfg["ignore"], supporting=cfg["supporting"])
+    res = compare(a, b)
     s, total = round(res["score"] or 0.0, 4), res["used_weight"]
     feats, num, by_group = [], 0.0, {}
     for name, f in res["features"].items():
-        group, kind, path = FEATURES.get(name, ("other", "", ""))
-        va, vb = (get(a, path), get(b, path)) if path else (None, None)
+        group, kind, path = FEATURES[name]
+        va, vb = get(a, path), get(b, path)
         row = {"feature": name, "group": group, "similarity": f["similarity"], "weight": f["weight"],
                "contribution": f["contribution"], "loss": None, "missing": None,
                "values": values(kind, va, vb, cfg["ignore"])}
@@ -41,7 +41,7 @@ def pair(a: Dict[str, Any], b: Dict[str, Any], tau: Optional[float] = None) -> D
             row["informative"] = True
         feats.append(row)
     groups = []
-    for key in list(GROUPS) + ["other"]:
+    for key in GROUPS:
         g = by_group.get(key)
         if not g:
             continue
