@@ -28,7 +28,8 @@ src/ads/app.py                Streamlit demo
 config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
 data/gold/groups.json         PUBLIC label-only gold; groups.local.json has the detailed notes (gitignored)
 tests/                        synthetic-data tests only (no network, no sample data)
-docs/                         CONTRIBUTING.md (track ownership), LICENSES.md, feature list, Polish originals
+docs/                         METHODOLOGY.md, DEMO.md, CONTRIBUTING.md (track ownership), LICENSES.md, feature list, Polish originals
+Dockerfile, .dockerignore     demo image (UNTESTED: no Docker daemon was available); requirements-optional.txt = heavy extras
 ```
 Pipeline: raw sample -> `assemble` -> `case_input.json` -> `extract` -> `profile.json` -> `generate` -> `variants.json`
 -> `similarity.score` -> `cluster` -> `evaluate` / demo. Per-case files live in `data/cases/<id>/` (gitignored).
@@ -71,6 +72,8 @@ Free tier = about 20 requests per day per model per project; retries and repair 
 09:00 Warsaw time. The big flash models (3.5/3.7/3.8) were exhausted on day 1. Models that still answered:
 `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`, `gemini-3-flash-preview`. Responses are cached in `.cache/llm`
 (keyed by prompt, input and model); reruns are free. Run API calls sequentially, not 5 at a time (per-minute limits).
+The client fails over across `fallback_models` (config/llm.yaml) when a model is out of quota and raises `QuotaExhausted`
+(no retries) when all are; an explicit `--model` disables failover. The demo shows a clear message and keeps sample cases working.
 Profiles in `data/cases` come from mixed models, so small differences between them are expected.
 
 ## Python 3.9 / Windows gotchas

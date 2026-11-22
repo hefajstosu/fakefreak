@@ -1,0 +1,5 @@
+# Heavy or optional components, NOT needed for the demo, tests or the LLM pipeline.
+# Install with: pip install -r requirements-optional.txt
+faster-whisper              # local speech-to-text alternative (the pipeline transcribes through the LLM by default)
+deepface                    # face matching against a small public-figure reference set (src/ads/preprocess/faces.py)
+tf-keras                    # needed by recent DeepFace with TensorFlow 2.16+

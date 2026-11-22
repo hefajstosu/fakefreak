@@ -21,7 +21,13 @@ from ads import dedup  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
 from ads.similarity import score  # noqa: E402
 
-MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.7-flash"]
+MODELS = ["auto (tries several models)", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3-flash-preview",
+          "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.7-flash"]
+
+from ads.llm.client import QuotaExhausted, load_env  # noqa: E402
+
+load_env()
+KEY_OK = bool(os.environ.get("GEMINI_API_KEY"))
 COLORS = {"fake_investment": "#4C78A8", "miracle_cure": "#54A24B", "fake_online_casino": "#E45756",
           "fake_online_shop": "#F58518", "other": "#999999"}
 
@@ -162,8 +168,14 @@ if not db:
 
 with st.sidebar:
     tau = st.slider("Similarity threshold (join a group)", 0.2, 0.95, 0.6, 0.01)
-    model = st.selectbox("LLM for new material", MODELS, help="Free-tier quota is per model; switch if one is exhausted.")
+    model = st.selectbox("LLM for new material", MODELS,
+                         help="'auto' tries the configured models in order and skips the ones out of free quota.")
     st.caption(f"{len(db)} cases in the database")
+    if KEY_OK:
+        st.caption("LLM key: found. New material can be analysed.")
+    else:
+        st.warning("LLM key missing (GEMINI_API_KEY in .env). Sample cases, campaigns and evaluation still work; "
+                   "analysing new material is disabled.")
 
 tab1, tab2, tab3 = st.tabs(["Analyse", "Campaigns", "Evaluation"])
 
@@ -184,7 +196,10 @@ with tab1:
         url = c1.text_input("Landing page URL (optional)")
         product = c2.text_input("Product or platform name (optional)")
         text = st.text_area("Pasted ad or page text (optional)", height=120)
-        if st.button("Analyse", type="primary"):
+        if not KEY_OK:
+            st.error("No LLM key configured, so new material cannot be analysed here. Use a sample case, or add "
+                     "GEMINI_API_KEY to .env and restart.")
+        if st.button("Analyse", type="primary", disabled=not KEY_OK):
             case = build_case(files, url, text, product)
             if not case:
                 st.error("Give at least a screenshot, a URL, some text or a product name.")
@@ -193,10 +208,15 @@ with tab1:
                     try:
                         from ads.llm.client import make_client
                         from ads.llm.extract import extract
-                        prof = extract(case, make_client(extraction_model=model))
+                        client = make_client() if model.startswith("auto") else make_client(extraction_model=model)
+                        prof = extract(case, client)
                         st.session_state["new_profile"] = prof
                         st.session_state["new_case"] = case
                         st.session_state.pop("saved_id", None)
+                    except QuotaExhausted as e:
+                        st.error("Every configured model is out of free quota right now (it resets about 09:00 Warsaw time). "
+                                 "Sample cases still work; analyses you already ran are cached and free. "
+                                 f"Details: {str(e)[:200]}")
                     except Exception as e:  # noqa: BLE001
                         st.error(f"Extraction failed: {str(e)[:400]}")
         if "new_profile" in st.session_state:

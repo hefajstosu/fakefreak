@@ -27,7 +27,8 @@ pip install -r requirements.txt
 echo GEMINI_API_KEY=your_key > .env                   # key from Google AI Studio; .env is gitignored
 ```
 Free-tier Gemini allows about 20 requests per day per model per project. Responses are cached in `.cache/llm`.
-If a model's quota is exhausted, pass another with `--model` (e.g. `gemini-3.8-flash`, `gemini-3.1-flash-lite`).
+By default the client fails over to the models listed in `config/llm.yaml` (`fallback_models`) when one is out of quota;
+an explicit `--model` is used as is. Optional heavy components (DeepFace, local Whisper) are in `requirements-optional.txt`.
 
 ## Sample data (not in the repo)
 The organiser's samples must not be redistributed publicly. Put them in `data/raw/do_udostępnienia/`.
@@ -54,5 +55,6 @@ See `docs/CONTRIBUTING.md`. The similarity method is deliberately a replaceable 
 implements `score(profile_a, profile_b) -> {"score", "contributions", "missing", "strong_links"}` plugs into
 clustering, evaluation and the demo unchanged.
 
-## Licences
-See `docs/LICENSES.md`.
+## Docs
+`docs/METHODOLOGY.md` (approach, evaluation, limits), `docs/DEMO.md` (demo script and fallback plan), `docs/CONTRIBUTING.md`,
+`docs/LICENSES.md`. A `Dockerfile` for the demo exists but is untested (mount `data/` at run time).

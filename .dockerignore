@@ -1,0 +1,12 @@
+.git
+.env
+.cache
+.venv
+__pycache__
+*.pyc
+data/raw
+data/cases
+data/refs
+data/gold/*.local.json
+tests
+docs

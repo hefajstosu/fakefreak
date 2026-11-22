@@ -14,7 +14,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 Part = Tuple[str, str]  # ("text", content), ("image", path) or ("audio", path)
@@ -42,6 +42,29 @@ def image_bytes(path: str, max_side: int = 1600) -> Tuple[bytes, str]:
     buf = io.BytesIO()
     im.save(buf, format="JPEG", quality=88)
     return buf.getvalue(), "image/jpeg"
+
+
+class QuotaExhausted(RuntimeError):
+    """Every model in the failover list is out of quota (or unavailable); retrying right away is pointless."""
+
+
+def is_quota_error(e: Exception) -> bool:
+    msg = str(e)
+    return any(c in msg for c in ("429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND", "403", "PERMISSION_DENIED"))
+
+
+def with_fallback(models: List[str], fn: Callable[[str], str]) -> str:
+    """Call fn(model) for each model in order; move on when a model is out of quota or unavailable."""
+    last: Optional[Exception] = None
+    for m in models:
+        try:
+            return fn(m)
+        except Exception as e:  # noqa: BLE001
+            if not is_quota_error(e):
+                raise
+            last = e
+    raise QuotaExhausted(f"all {len(models)} model(s) are out of free quota or unavailable ({', '.join(models)}). "
+                         f"Last error: {str(last)[:160]}")
 
 
 class LLMClient:
@@ -76,6 +99,8 @@ class LLMClient:
                 if use_cache:
                     open(path, "w", encoding="utf-8").write(text)
                 return text
+            except QuotaExhausted as e:  # every model is out of quota: fail fast, with a clear message
+                raise
             except Exception as e:  # rate limit / transient server error -> back off and retry
                 last = e
                 msg = str(e)
@@ -110,8 +135,9 @@ def parse_json(text: str) -> Dict[str, Any]:
 
 
 class GeminiClient(LLMClient):
-    def __init__(self, *a, api_key_env: str = "GEMINI_API_KEY", **kw):
+    def __init__(self, *a, api_key_env: str = "GEMINI_API_KEY", fallback_models: Optional[List[str]] = None, **kw):
         super().__init__(*a, **kw)
+        self.models = [self.model] + [m for m in (fallback_models or []) if m != self.model]
         from google import genai
         key = os.environ.get(api_key_env)
         if not key:
@@ -119,6 +145,9 @@ class GeminiClient(LLMClient):
         self._genai, self._client = genai, genai.Client(api_key=key)
 
     def _call(self, system: str, parts: List[Part]) -> str:
+        return with_fallback(self.models, lambda m: self._call_model(m, system, parts))
+
+    def _call_model(self, model: str, system: str, parts: List[Part]) -> str:
         from google.genai import types
         contents = []
         for kind, val in parts:
@@ -131,7 +160,7 @@ class GeminiClient(LLMClient):
             else:
                 contents.append(types.Part.from_text(text=val))
         r = self._client.models.generate_content(
-            model=self.model, contents=contents,
+            model=model, contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system, temperature=self.temperature,
                 **({"response_mime_type": "application/json"} if self.json_mode else {})))
@@ -154,6 +183,8 @@ def make_client(model_key: str = "extraction_model", json_mode: bool = True, **o
     cfg = {**load_config(), **overrides}
     provider = cfg.get("provider", "gemini")
     if provider == "gemini":
+        explicit = bool(overrides.get(model_key))  # an explicitly chosen model is used as is, without failover
         return GeminiClient(cfg[model_key], cfg["cache_dir"], cfg.get("max_retries", 2), json_mode=json_mode,
-                            api_key_env=cfg.get("api_key_env", "GEMINI_API_KEY"))
+                            api_key_env=cfg.get("api_key_env", "GEMINI_API_KEY"),
+                            fallback_models=None if explicit else cfg.get("fallback_models"))
     raise ValueError(f"unknown provider: {provider}")
