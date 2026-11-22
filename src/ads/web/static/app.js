@@ -7,13 +7,13 @@ const SCAM = {
   fake_online_shop: "fałszywy sklep", political_disinformation: "dezinformacja polityczna",
   impersonation_other: "podszywanie się (inne)", not_suspicious: "niepodejrzane", other: "inne",
 };
-const STATUS = {  // decision status -> [css class, heading]
-  duplicate: ["ok", "Duplikat sprawy, która już jest w bazie"],
-  same_content: ["ok", "Ta sama treść co znana kampania, inny host"],
-  confirmed: ["ok", "Pasuje do znanej kampanii (potwierdzone twardym dowodem)"],
-  likely: ["info", "Prawdopodobnie znana kampania"],
-  suggested_family: ["warn", "Przypomina znaną rodzinę oszustw, za słabo na kampanię"],
-  new_unconfirmed: ["warn", "Nowa kampania (do potwierdzenia przez analityka)"],
+const STATUS = {  // decision status -> [css class, stamp, heading]
+  duplicate: ["ok", "Duplikat", "Ta sprawa już jest w bazie"],
+  same_content: ["ok", "Ta sama treść", "Treść znanej kampanii na innym hoście"],
+  confirmed: ["ok", "Potwierdzona", "Pasuje do znanej kampanii (twardy dowód)"],
+  likely: ["info", "Prawdopodobna", "Prawdopodobnie znana kampania"],
+  suggested_family: ["warn", "Możliwa rodzina", "Przypomina znaną rodzinę oszustw, za słabo na kampanię"],
+  new_unconfirmed: ["warn", "Nowa", "Nowa kampania, do potwierdzenia przez analityka"],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,6 +46,40 @@ async function api(path, body) {
 }
 
 const tau = () => Number($("tau").value);
+const smooth = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+
+// ---------------------------------------------------------------- tabs
+const TABS = { analizator: ["tab-analiza", "panel-analiza"], grupy: ["tab-grupy", "panel-grupy"] };
+
+function showTab(name, focus = false) {
+  for (const [key, [tabId, panelId]] of Object.entries(TABS)) {
+    const on = key === name;
+    $(tabId).setAttribute("aria-selected", String(on));
+    $(tabId).tabIndex = on ? 0 : -1;
+    $(panelId).hidden = !on;
+  }
+  if (focus) $(TABS[name][0]).focus();
+  if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
+}
+
+for (const [key, [tabId]] of Object.entries(TABS)) {
+  $(tabId).addEventListener("click", () => showTab(key));
+  $(tabId).addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+      ev.preventDefault();
+      showTab(key === "analizator" ? "grupy" : "analizator", true);
+    }
+  });
+}
+
+function openCase(cid) {
+  showTab("grupy");
+  const card = document.getElementById(`case-${cid}`);
+  if (!card) return;
+  card.closest("details").open = true;
+  card.scrollIntoView({ behavior: smooth(), block: "center" });
+  card.focus({ preventScroll: true });
+}
 
 // ---------------------------------------------------------------- one case card (database case or the new article)
 function caseCard(s, title) {
@@ -54,75 +88,94 @@ function caseCard(s, title) {
     ["Produkt", s.product || "–"],
     ["Osoby", s.people.join(", ") || "–"],
     ["Podszywa się", s.media.join(", ") || "–"],
-    ["Szablon", s.templates],
+    ["Szablon", s.templates.replace(" -> ", " → ")],
     ["Domeny", s.domains.join(", ") || "–"],
     ["Trackery", String(s.trackers.length)],
   ];
-  const dl = el("dl", {}, rows.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: v })]));
-  const chips = el("div", { class: "chips" }, s.persuasion.map((p) => el("span", { class: "chip", text: p.replaceAll("_", " ") })));
-  const body = el("div", {}, [
-    el("h4", { text: title + (s.unconfirmed ? " · niepotwierdzona" : "") }), dl,
-    s.persuasion.length ? el("div", { class: "summary" }, chips) : null,
+  const fields = el("dl", { class: "fields" }, rows.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: v })]));
+  const head = el("div", { class: "case-title" }, [
+    el("h4", { text: title }),
+    s.unconfirmed ? el("span", { class: "tag flag", text: "niepotwierdzona" }) : null,
+  ]);
+  const body = el("div", { class: "case-body" }, [
+    head, fields,
+    s.persuasion.length ? el("div", { class: "tags" }, s.persuasion.map((p) => el("span", { class: "tag", text: p.replaceAll("_", " ") }))) : null,
     el("p", { class: "summary", text: s.summary, title: s.summary }),
   ]);
-  const img = s.image_url ? el("img", { src: s.image_url, alt: `Zrzut reklamy, sprawa ${s.case}`, loading: "lazy", width: "96", height: "128" }) : null;
-  return el("article", { class: "case" + (img ? "" : " noimg"), id: s.case === "new" ? null : `case-${s.case}` }, [img, body]);
+  const img = s.image_url
+    ? el("figure", {}, el("img", { src: s.image_url, alt: `Zrzut reklamy, sprawa ${s.case}`, loading: "lazy", width: "110", height: "150" }))
+    : null;
+  const id = s.case === "new" ? null : `case-${s.case}`;
+  return el("article", { class: "case" + (img ? "" : " noimg"), id, tabindex: id ? "-1" : null }, [img, body]);
 }
 
-// ---------------------------------------------------------------- groups
+// ---------------------------------------------------------------- groups tab
 async function loadGroups() {
   const box = $("groups");
   try {
     const data = await api(`/api/groups?tau=${tau()}`);
-    $("groups-hint").textContent = `Kampania = sprawy połączone twardym dowodem albo średnim podobieństwem ≥ τ = ${data.tau.toFixed(2)}. ` +
-      "Rodzina = kampanie z tym samym typem oszustwa.";
-    box.replaceChildren(...data.groups.map(groupCard));
+    $("groups-hint").textContent = `Kampania: sprawy połączone twardym dowodem albo średnim podobieństwem ≥ τ = ${data.tau.toFixed(2)}. ` +
+      "Rodzina: kampanie z tym samym typem oszustwa.";
+    $("groups-count").textContent = `[${data.groups.length}]`;
+    box.replaceChildren(el("div", { class: "groups" }, data.groups.map(groupRow)));
   } catch (e) {
     box.replaceChildren(el("p", { class: "message error", text: `Nie udało się wczytać grup: ${e.message}` }));
   }
 }
 
-function groupCard(g) {
+function groupRow(g) {
   const ids = g.members.map((m) => m.case);
   const hit = joined.some((j) => j.length === ids.length && j.every((c) => ids.includes(c)));
   const summary = el("summary", {}, [
-    el("span", { class: "group-title", text: `Kampania ${g.no}` }),
-    el("span", { class: "badge", text: `rodzina ${g.family}` }),
-    el("span", { class: "badge", text: SCAM[g.scam_type] || g.scam_type }),
-    el("span", { class: "badge", text: casesPl(ids.length) }),
-    el("span", { class: "group-ids", text: ids.join(", ") }),
-    hit ? el("span", { class: "badge hit", text: "pasuje nowy artykuł" }) : null,
+    el("span", { class: "g-no", text: `K${g.no}` }),
+    el("span", { class: "g-fam", text: `rodzina ${g.family}` }),
+    el("span", { class: "g-main" }, [
+      el("span", { class: "g-type", text: SCAM[g.scam_type] || g.scam_type }),
+      el("span", { class: "g-ids", text: ids.join(" · ") }),
+      hit ? el("span", { class: "tag solid", text: "pasuje nowy artykuł" }) : null,
+    ]),
+    el("span", { class: "g-count", text: casesPl(ids.length) }),
   ]);
   const links = g.links.slice(0, 8).map((l) => el("li", {}, [
-    `${l.a} ↔ ${l.b}: podobieństwo ${l.score.toFixed(2)}`,
-    l.evidence.length ? el("span", { class: "ev", text: ` · ${l.evidence.join("; ")}` }) : " · brak twardych dowodów",
+    el("span", { class: "pair", text: `${l.a} ↔ ${l.b}` }),
+    el("span", { class: "sc", text: l.score.toFixed(2) }),
+    l.evidence.length ? el("span", { class: "ev", text: l.evidence.join("; ") }) : el("span", { class: "none", text: "brak twardych dowodów" }),
   ]));
   const body = el("div", { class: "group-body" }, [
-    links.length ? el("ul", { class: "links" }, links) : null,
+    links.length ? el("ul", { class: "links", "aria-label": "Powiązania między sprawami" }, links) : null,
     el("div", { class: "cases" }, g.members.map((m) => caseCard(m, `Sprawa ${m.case}`))),
   ]);
-  const card = el("details", { class: "group" + (hit ? " hit" : "") }, [summary, body]);
-  card.open = hit;
-  return card;
+  const row = el("details", { class: "group" + (hit ? " hit" : "") }, [summary, body]);
+  row.open = hit;
+  return row;
 }
 
-// ---------------------------------------------------------------- analysis
+// ---------------------------------------------------------------- analyser tab
 function showResult(r) {
-  const [cls, heading] = STATUS[r.decision.status] || ["info", r.decision.status];
-  $("decision").className = `decision ${cls}`;
-  $("decision").replaceChildren(el("strong", { text: heading }), `${r.decision.title}. ${r.decision.explanation}`);
+  const [cls, stamp, heading] = STATUS[r.decision.status] || ["info", r.decision.status, r.decision.status];
+  $("verdict-code").textContent = r.decision.status;
   const notes = [...r.notes];
   if (!r.llm_used) notes.push("duplikat rozpoznany bez wywołania LLM (użyto profilu z bazy)");
-  $("notes").textContent = notes.length ? `Skan strony: ${notes.join("; ")}` : "";
-  $("profile").replaceChildren(el("div", { class: "cases" }, caseCard(r.profile, "Analizowany artykuł")));
-  $("neighbours").tBodies[0].replaceChildren(...r.neighbours.map((n) => el("tr", {}, [
-    el("td", {}, el("a", { href: `#case-${n.case}`, text: n.case })),
-    el("td", { class: "num" }, [el("span", { class: "bar", style: `width:${Math.round(n.score * 80)}px` }), n.score.toFixed(2)]),
-    el("td", { text: n.product || "–" }),
-    el("td", { text: n.evidence.join("; ") || "–" }),
-  ])));
+  $("decision").replaceChildren(...[
+    el("span", { class: `stamp ${cls}`, text: stamp }),
+    el("strong", { text: heading }),
+    el("p", { text: `${r.decision.title}. ${r.decision.explanation}` }),
+    notes.length ? el("p", { class: "notes", text: `Skan strony: ${notes.join("; ")}` }) : null,
+  ].filter(Boolean));
+  $("profile").replaceChildren(caseCard(r.profile, "Analizowany artykuł"));
+  $("neighbours").tBodies[0].replaceChildren(...r.neighbours.map((n) => {
+    const link = el("a", { href: "#grupy", text: n.case });
+    link.addEventListener("click", (ev) => { ev.preventDefault(); openCase(n.case); });
+    const meter = el("span", { class: "meter", "aria-hidden": "true" }, el("i", { style: `width:${Math.round(n.score * 100)}%` }));
+    return el("tr", {}, [
+      el("td", {}, link),
+      el("td", { class: "num" }, [meter, n.score.toFixed(2)]),
+      el("td", { text: n.product || "–" }),
+      el("td", { class: n.evidence.length ? "ev" : null, text: n.evidence.join("; ") || "–" }),
+    ]);
+  }));
   $("save-btn").disabled = false;
-  $("save-msg").textContent = "Kolejne artykuły będą porównywane także z tym.";
+  $("save-msg").textContent = "";
   $("result").hidden = false;
 }
 
@@ -131,22 +184,23 @@ $("analyse-form").addEventListener("submit", async (ev) => {
   const url = $("url").value.trim();
   const text = $("text").value.trim();
   const msg = $("form-msg");
-  msg.className = "message";
   if (!url && !text) {
     msg.className = "message error";
     msg.textContent = "Podaj adres URL albo wklej tekst artykułu.";
     return;
   }
   $("analyse-btn").disabled = true;
-  msg.textContent = "Pobieram stronę i porównuję z bazą… (zwykle 5–15 s)";
+  msg.className = "message busy";
+  msg.textContent = "Pobieram stronę i porównuję z bazą…";
   try {
     const r = await api("/api/analyze", { url, text, tau: tau() });
     analysisId = r.id;
     joined = r.joins;
     showResult(r);
+    msg.className = "message";
     msg.textContent = "";
-    await loadGroups();
-    $("result").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    loadGroups();
+    $("result").scrollIntoView({ behavior: smooth() });
   } catch (e) {
     msg.className = "message error";
     msg.textContent = e.message;
@@ -168,6 +222,12 @@ $("save-btn").addEventListener("click", async () => {
   }
 });
 
+$("show-groups-btn").addEventListener("click", () => {
+  showTab("grupy");
+  const hit = document.querySelector(".group.hit");
+  (hit || $("panel-grupy")).scrollIntoView({ behavior: smooth() });
+});
+
 $("tau").addEventListener("input", () => { $("tau-out").textContent = tau().toFixed(2); });
 $("tau").addEventListener("change", () => { joined = []; loadGroups(); });
 
@@ -175,13 +235,14 @@ async function loadStatus() {
   try {
     const s = await api("/api/status");
     const parts = [el("b", { text: casesPl(s.cases) }), " w bazie · "];
-    parts.push(s.llm ? "LLM: gotowy" : el("span", { class: "warn", text: "brak klucza LLM: analiza nowych artykułów wyłączona" }));
+    parts.push(s.llm ? "LLM gotowy" : el("span", { class: "warn", text: "brak klucza LLM" }));
     $("status").replaceChildren(...parts);
     $("analyse-btn").disabled = !s.llm;
   } catch (e) {
-    $("status").textContent = "Serwer nie odpowiada.";
+    $("status").textContent = "serwer nie odpowiada";
   }
 }
 
+showTab(location.hash === "#grupy" ? "grupy" : "analizator");
 loadStatus();
 loadGroups();

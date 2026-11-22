@@ -6,73 +6,97 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="description" content="Wewnętrzny panel: analiza artykułu i przypisanie do znanych kampanii fałszywych reklam.">
   <title>Panel analizy artykułów · Follow the Fake</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%231f5fa8%22/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23111418%22/%3E%3Crect x=%224%22 y=%224%22 width=%228%22 height=%228%22 fill=%22%23e8ebee%22/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="wrap top-row">
-      <div>
-        <p class="eyebrow">Follow the Fake · NASK</p>
+  <header class="bar">
+    <div class="wrap bar-row">
+      <div class="brand">
+        <span class="code">FTF / NASK</span>
         <h1>Panel analizy artykułów</h1>
       </div>
-      <div class="status" id="status" aria-live="polite">Łączenie z serwerem…</div>
+      <div class="bar-tools">
+        <label class="tau" for="tau">
+          <span class="code">Próg <span class="greek">τ</span></span>
+          <input id="tau" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
+          <output id="tau-out" for="tau">0.60</output>
+        </label>
+        <div class="status code" id="status" aria-live="polite">łączenie…</div>
+      </div>
     </div>
   </header>
 
+  <nav class="tabs" aria-label="Widoki">
+    <div class="wrap tab-row" role="tablist">
+      <button role="tab" id="tab-analiza" aria-controls="panel-analiza" aria-selected="true">
+        <span class="tab-no">01</span>Analizator
+      </button>
+      <button role="tab" id="tab-grupy" aria-controls="panel-grupy" aria-selected="false" tabindex="-1">
+        <span class="tab-no">02</span>Rozpoznane grupy <span class="count" id="groups-count"></span>
+      </button>
+    </div>
+  </nav>
+
   <main class="wrap">
-    <section class="card" aria-labelledby="analyse-h">
-      <h2 id="analyse-h">Analiza artykułu</h2>
-      <p class="hint">Wklej adres artykułu. Program pobierze stronę, wyciągnie profil (LLM) i porówna go ze sprawami w bazie.</p>
-      <form id="analyse-form" novalidate>
-        <div class="url-row">
-          <label class="sr-only" for="url">Adres URL artykułu</label>
-          <input id="url" name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://…">
-          <button id="analyse-btn" type="submit" class="primary">Analizuj</button>
+    <section id="panel-analiza" role="tabpanel" aria-labelledby="tab-analiza">
+      <div class="block">
+        <div class="block-head"><h2>Nowy artykuł</h2><span class="code">wejście</span></div>
+        <form id="analyse-form" class="block-body" novalidate>
+          <label class="field-label" for="url">Adres URL artykułu</label>
+          <div class="url-row">
+            <input id="url" name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://">
+            <button id="analyse-btn" type="submit" class="primary">Analizuj</button>
+          </div>
+          <details class="paste">
+            <summary>Strona się nie wczytuje albo pokazuje coś innego? Wklej jej tekst</summary>
+            <label class="sr-only" for="text">Tekst artykułu</label>
+            <textarea id="text" name="text" rows="7" placeholder="Treść artykułu"></textarea>
+          </details>
+          <p class="hint">Program pobiera stronę, wyciąga profil przez LLM i porównuje go ze sprawami w bazie. Zwykle 5–15 s.</p>
+          <p class="message" id="form-msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+
+      <div id="result" hidden>
+        <div class="block">
+          <div class="block-head"><h2>Werdykt</h2><span class="code" id="verdict-code"></span></div>
+          <div class="block-body verdict" id="decision"></div>
         </div>
-        <details class="paste">
-          <summary>Strona się nie wczytuje albo pokazuje coś innego? Wklej jej tekst</summary>
-          <label class="sr-only" for="text">Tekst artykułu</label>
-          <textarea id="text" name="text" rows="6" placeholder="Treść artykułu…"></textarea>
-        </details>
-        <div class="tau-row">
-          <label for="tau">Próg dołączenia do kampanii τ</label>
-          <input id="tau" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
-          <output id="tau-out" for="tau">0.60</output>
+
+        <div class="split">
+          <div class="block">
+            <div class="block-head"><h2>Profil artykułu</h2><span class="code">LLM</span></div>
+            <div class="block-body" id="profile"></div>
+          </div>
+          <div class="block">
+            <div class="block-head"><h2>Najbliższe sprawy</h2><span class="code">top 5</span></div>
+            <div class="table-wrap">
+              <table id="neighbours">
+                <thead><tr><th scope="col">Sprawa</th><th scope="col">Podobieństwo</th><th scope="col">Produkt</th><th scope="col">Twarde dowody</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="block-foot">
+              <button id="save-btn" type="button">Zapisz do bazy</button>
+              <button id="show-groups-btn" type="button" class="link-btn">Pokaż w rozpoznanych grupach →</button>
+              <span class="hint" id="save-msg"></span>
+            </div>
+          </div>
         </div>
-      </form>
-      <p class="message" id="form-msg" role="status" aria-live="polite"></p>
+      </div>
     </section>
 
-    <section class="card result" id="result" hidden aria-labelledby="result-h">
-      <h2 id="result-h">Wynik</h2>
-      <div class="decision" id="decision"></div>
-      <p class="notes" id="notes"></p>
-      <h3>Profil artykułu</h3>
-      <div id="profile"></div>
-      <h3>Najbliższe sprawy w bazie</h3>
-      <div class="table-wrap">
-        <table id="neighbours">
-          <thead><tr><th scope="col">Sprawa</th><th scope="col">Podobieństwo</th><th scope="col">Produkt</th><th scope="col">Twarde dowody</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="save-row">
-        <button id="save-btn" type="button">Zapisz do bazy</button>
-        <span class="hint" id="save-msg">Kolejne artykuły będą porównywane także z tym.</span>
-      </div>
-    </section>
-
-    <section aria-labelledby="groups-h">
-      <div class="section-head">
-        <h2 id="groups-h">Grupy fake'ów w bazie</h2>
+    <section id="panel-grupy" role="tabpanel" aria-labelledby="tab-grupy" hidden>
+      <div class="groups-head">
+        <h2>Rozpoznane grupy</h2>
         <p class="hint" id="groups-hint"></p>
       </div>
       <div id="groups"><p class="hint">Wczytywanie grup…</p></div>
     </section>
   </main>
 
-  <footer class="wrap foot">Panel lokalny (127.0.0.1). Dane z próbek organizatora: nie publikować.</footer>
+  <footer class="wrap foot code">Panel lokalny 127.0.0.1 · dane z próbek organizatora: nie publikować</footer>
   <script src="/app.js"></script>
 </body>
 </html>
