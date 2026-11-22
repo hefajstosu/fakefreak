@@ -43,7 +43,10 @@ PICKLIST = re.compile(r"(?:[A-ZÅÇ][^\s+]*(?: [^\s+]+){0,3} \+\d{1,4}\s+){8,}")
 
 
 def html_to_text(path: str) -> str:
-    s = open(path, encoding="utf-8", errors="ignore").read()
+    return html_str_to_text(open(path, encoding="utf-8", errors="ignore").read())
+
+
+def html_str_to_text(s: str) -> str:
     s = re.sub(r"(?is)<!--.*?-->", "", s)
     s = re.sub(r"(?is)<(script|style|noscript|svg|head|template)[^>]*>.*?</\1>", "", s)
     s = re.sub(r"(?i)</(p|div|li|h\d|tr|section|article)>|<br\s*/?>", "\n", s)

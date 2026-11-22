@@ -9,6 +9,7 @@ Counterfactual variants (same scam blueprint, swapped surface details) can be ge
 ```
 raw sample (screenshot / video / saved pages / HAR)
   -> assemble   (src/ads/preprocess/assemble.py)   case_input.json   [schemas/case_input.schema.json]
+     (live URLs: src/ads/preprocess/url_scan.py gives page text + the same traces as the HAR parser)
   -> extract    (src/ads/llm/extract.py)           profile.json      [schemas/profile.schema.json]
   -> generate   (src/ads/llm/generate.py)          variants.json     [schemas/variant.schema.json]
   -> similarity (src/ads/similarity.py: score)     score + per-feature contributions + strong links

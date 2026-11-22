@@ -110,24 +110,25 @@ def build_case(files, url, text, product):
     if images:
         parts.insert(0, {"role": "ad_creative", "medium": "image", "text": None, "images": images})
     page_text = text or ""
+    scan = None
     if url:
-        try:
-            import requests
-            from ads.preprocess.assemble import html_to_text
-            r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0 (Linux; Android 14) Mobile", "Accept-Language": "pl-PL"})
-            p = os.path.join(tmp, "page.html")
-            open(p, "wb").write(r.content)
-            page_text += "\n" + html_to_text(p)
-        except Exception as e:  # noqa: BLE001
-            st.warning(f"Could not fetch the URL ({e}); using the other inputs.")
+        from ads.preprocess.url_scan import scan_url
+        scan = scan_url(url)
+        if scan["ok"]:
+            page_text += chr(10) + scan["text"]
+            for n in scan["notes"]:
+                st.info(f"URL scan: {n}")
+        else:
+            st.warning(f"Could not scan the URL ({scan['error']}); using the other inputs.")
+            scan = None
     if product:
         page_text = f"Product or platform named by the analyst: {product}\n" + page_text
     if page_text.strip():
         parts.append({"role": "bridge_page" if images else "offer_page", "medium": "text", "text": page_text.strip(), "images": []})
     if not parts:
         return None
-    tech = {"urls_and_domains": [url] if url else [], "redirect_chain": [url] if url else [], "tracker_ids": [],
-            "dom_and_form_clues": [], "domain_and_cert_metadata": []}
+    tech = scan["technical_summary"] if scan else {"urls_and_domains": [], "redirect_chain": [], "tracker_ids": [],
+                                                  "dom_and_form_clues": [], "domain_and_cert_metadata": []}
     return {"schema_version": "1.0", "case_id": "new", "parts": parts, "technical_summary": tech, "resolved_identities": []}
 
 

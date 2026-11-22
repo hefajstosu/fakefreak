@@ -15,7 +15,7 @@ prompts/extraction.txt        system prompt: case -> profile JSON (closed enums,
 prompts/alternatives.txt      system prompt: profile -> N counterfactual variants
 schemas/*.schema.json         THE CONTRACTS: case_input, profile, variant (JSON Schema)
 src/ads/preprocess/           assemble.py (manifest -> case_input), har.py (HAR -> traces), video.py (contact sheet),
-                              transcribe.py (audio -> transcript via LLM), faces.py (DeepFace, optional, not installed)
+                              transcribe.py (audio -> transcript via LLM), url_scan.py (live URL -> text + traces), faces.py (DeepFace, optional, not installed)
 src/ads/llm/                  client.py (provider-agnostic, disk cache, retries), extract.py, generate.py
 src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
 src/ads/similarity.py         score(a, b): REPLACEABLE similarity (a teammate is improving it)
@@ -82,8 +82,9 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   similarity (the 47/14/5 health group fails because the ad-template feature is too influential).
 - Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
 - Entity strings are not normalised yet (`tvn24` vs `TVN24`): normalise in similarity, not in profiles.
-- Not done: face reference set (DeepFace not installed), live URL scan with tracker extraction, image dedup,
-  per-campaign thresholds, ad-library scheduler.
+- Live URL scan is done (`url_scan.py`: redirect chain, tracker IDs, form endpoints, first-party files; blocks private
+  addresses; does not run JavaScript). The demo uses it for the URL field.
+- Not done: face reference set (DeepFace not installed), image dedup, per-campaign thresholds, ad-library scheduler.
 - The teammates' earlier analysis (entity masking, rarity weighting, per-campaign thresholds, hierarchy) is in git
   history: `git show 8837ebb:analiza_algorytmu.md`.
 
