@@ -47,6 +47,7 @@ python -m ads.robustness channels                       # switch each feature gr
 python -m ads.robustness make-degraded --model gemini-3.5-flash-lite   # re-extract reduced inputs (LLM quota)
 python -m ads.robustness degrade                        # missing-data tests (ad only / pages only / no traces)
 cd .. && streamlit run src/ads/app.py                   # demonstrator
+streamlit run src/ads/panel.py                          # simple analyst panel: paste a URL, browse the campaigns
 python -m pytest tests                                  # unit tests (synthetic data, no network)
 ```
 
