@@ -47,6 +47,10 @@ def fake_web(calls):
                           "not_before": "2026-10-08T00:00:00Z", "issuer": {"friendly_name": "Let's Encrypt"}}])
         if "web.archive.org" in url:
             return Resp([["timestamp"], ["20261009000000"]])
+        if "hole.cert.pl" in url:
+            r = Resp(None)
+            r.text = "listed.test\nfoo.example\n"
+            return r
         raise AssertionError(url)
     return get
 
@@ -57,6 +61,7 @@ def web(monkeypatch, tmp_path):
     monkeypatch.setattr(dm, "CACHE_DIR", str(tmp_path))
     monkeypatch.setattr(dm.requests, "get", fake_web(calls))
     monkeypatch.setattr(dm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(dm, "_warning_list", None)
     return calls
 
 
@@ -90,3 +95,9 @@ def test_only_non_mass_facts_can_link_and_a_shared_certificate_joins_a_campaign(
     r = score(a, b)
     assert any(s.startswith("domains on one certificate") for s in r["strong_links"]) and clustering.is_must_link(r)
     assert "infra_metadata" not in r["contributions"]       # weight 0: reported, not scored
+
+
+def test_cert_pl_warning_list_is_checked_locally(web):
+    assert "warning_list:cert_pl" in dm.domain_facts("listed.test")
+    assert "warning_list:cert_pl" not in dm.domain_facts("site.test")
+    assert sum("hole.cert.pl" in u for u in web) == 1          # downloaded once, then checked locally

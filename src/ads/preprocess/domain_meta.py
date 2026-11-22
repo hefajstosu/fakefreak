@@ -10,6 +10,8 @@ Sources, all public and free, queried only by domain name or by a public IP that
   Certificate Transparency (Cert Spotter; crt.sh as a fallback)   number of certificates, first issuance, issuer,
                                                        other registered domains named on the same certificates
   Wayback Machine CDX                                  first archived snapshot (works for dead domains too)
+  CERT Polska warning list (hole.cert.pl)              is the domain already on the national list of dangerous
+                                                       domains (downloaded once a day, checked locally)
 Every answer is cached in .cache/domain_meta (negative answers too) for CACHE_DAYS; a source that fails leaves its
 facts out and the rest still count (short-lived scam domains are often gone by the time they are analysed).
 
@@ -17,7 +19,7 @@ Facts are strings in technical_artifacts.domain_and_cert_metadata (schema unchan
   domain:<d>  registered:<YYYY-MM-DD>  registrar:<name>  status:<rdap status>|nxdomain|rdap_not_found
   age_at_capture_days:<n>  regbatch:<YYYY-MM-DD>|<registrar>  ns:<provider domain>  net:<hosting network>
   country:<cc>  certs:<n>  cert_first:<YYYY-MM-DD>  cert_issuer:<org>  cert_san:<other registered domain>
-  wayback_first:<YYYY-MM-DD>
+  wayback_first:<YYYY-MM-DD>  warning_list:cert_pl
 Mass infrastructure (big CDNs and clouds, registrar parking name servers) is marked by `is_mass_fact` and never used
 as evidence: most scam pages sit behind the same CDN.
 """
@@ -176,6 +178,30 @@ def wayback_first(d: str) -> List[str]:
     return [f"wayback_first:{ts[:4]}-{ts[4:6]}-{ts[6:8]}"]
 
 
+CERT_PL_LIST = "https://hole.cert.pl/domains/v2/domains.txt"
+_warning_list: Optional[set] = None
+
+
+def cert_pl_listed(d: str) -> List[str]:
+    """Whether the domain (or a subdomain of it) is on CERT Polska's public warning list. The list is downloaded at
+    most once a day into the cache and checked locally, so no single domain is sent anywhere."""
+    global _warning_list
+    if _warning_list is None:
+        f = os.path.join(CACHE_DIR, "cert_pl_domains.txt")
+        if not (os.path.exists(f) and time.time() - os.path.getmtime(f) < 86400):
+            try:
+                r = requests.get(CERT_PL_LIST, headers={"User-Agent": HEADERS["User-Agent"]}, timeout=60)
+                r.raise_for_status()
+                os.makedirs(CACHE_DIR, exist_ok=True)
+                open(f, "w", encoding="utf-8").write(r.text)
+            except requests.RequestException:
+                if not os.path.exists(f):
+                    return []
+        _warning_list = {ln.strip().lower() for ln in open(f, encoding="utf-8") if ln.strip()}
+    listed = d in _warning_list or any(x.endswith("." + d) for x in _warning_list if x.endswith(d))
+    return ["warning_list:cert_pl"] if listed else []
+
+
 # ---------------------------------------------------------------- facts for a domain and for a case
 
 def domain_facts(d: str, captured: Optional[date] = None) -> List[str]:
@@ -185,7 +211,7 @@ def domain_facts(d: str, captured: Optional[date] = None) -> List[str]:
         facts.append("status:nxdomain")
     elif a:
         facts += rdap_ip(a[0])
-    facts += certificates(d) + wayback_first(d)
+    facts += certificates(d) + wayback_first(d) + cert_pl_listed(d)
     reg = next((f[11:] for f in facts if f.startswith("registered:")), None)
     registrar = next((f[10:] for f in facts if f.startswith("registrar:")), None)
     if reg and registrar:

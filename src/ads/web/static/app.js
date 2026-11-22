@@ -187,6 +187,7 @@ function infraSummary(facts) {  // the case card line: registration, age, regist
   if (get("certs").length) parts.push(`certyfikaty: ${get("certs").join(", ")}`);
   if (get("wayback_first").length) parts.push(`archiwum od ${get("wayback_first").join(", ")}`);
   if (facts.some((f) => f === "status:nxdomain")) parts.push("domena już nie istnieje");
+  if (facts.includes("warning_list:cert_pl")) parts.push("na liście ostrzeżeń CERT Polska");
   return parts.join(" · ");
 }
 
