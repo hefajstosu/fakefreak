@@ -21,6 +21,7 @@ useful sources that need an API key and were therefore not used. Usefulness of t
 | Certificate Transparency (Cert Spotter; crt.sh as fallback) | number of certificates, first issuance, issuer, other domains on the same certificate | 5/7 cases | yes (logs are permanent) | domains on one small certificate would prove one operator (none on the samples); first issuance dates the campaign | Cert Spotter free tier without a key is rate limited; crt.sh was down (HTTP 502) during the tests |
 | Wayback Machine CDX | first archived snapshot | 4/7 cases | yes | dates a page that is already gone | Internet Archive terms |
 | CERT Polska warning list (hole.cert.pl) | is the domain already listed as dangerous | 2/7 cases listed | yes | confirms the material is known; links nothing | public list, downloaded at most once a day and checked locally |
+| Faces in ads, video frames and page images (YuNet + SFace, OpenCV Model Zoo, local) | is the same face in two materials (no names) | faces in 9/10 cases | yes (captured) | describes the scheme (8/10 same-scheme pairs) but misleads on 6/32 unrelated pairs: reported, not scored | models MIT / Apache-2.0; biometric data kept in a local cache only |
 | Synthetic variants (LLM) | new versions of known campaigns with swapped surface details | 189 variants of 10 cases | n/a | evaluation material only (never grouped) | synthetic data about real people: internal only |
 
 All registry and log queries send only a domain name or a public IP address; the scam site itself is never contacted

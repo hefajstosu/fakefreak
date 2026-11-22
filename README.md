@@ -58,6 +58,7 @@ cd src
 python -m ads.preprocess.assemble --all [--domain-meta] # manifests -> case_input.json (+ public domain metadata)
 python -m ads.preprocess.enrich --all --domain-meta     # add page fingerprints / domain metadata to existing cases, no LLM
 python -m ads.features                                  # usefulness of every feature against the gold labels
+python -m ads.preprocess.likeness --download --gold     # same face across materials (local, no names; ~39 MB models)
 python -m ads.llm.extract ../data/cases/48/case_input.json ../data/cases/48/profile.json
 python -m ads.llm.generate 48 --n 3 --k 2               # variants
 python -m ads.evaluate --matrix                         # metrics vs gold

@@ -20,6 +20,8 @@ schemas/*.schema.json         THE CONTRACTS: case_input, profile, variant (JSON 
 src/ads/preprocess/           assemble.py (manifest -> case_input), har.py (HAR -> traces), video.py (contact sheet),
                               page_fp.py (page structure MinHash + image kit), domain_meta.py (RDAP/DNS/CT/Wayback/
                               CERT Polska list, cached in .cache/domain_meta), enrich.py (adds both to existing cases, no LLM),
+                              likeness.py (same face across materials, YuNet+SFace via OpenCV, no names; reported, not
+                              scored; face features only in gitignored .cache/likeness),
                               transcribe.py (audio -> transcript via LLM), url_scan.py (live URL -> text + traces), faces.py (DeepFace, optional, not installed)
 src/ads/llm/                  client.py (provider-agnostic, disk cache, retries), extract.py, generate.py
 src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
@@ -158,7 +160,8 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   bits: on the sample images the closest unrelated pair was 9 bits apart, so no false positives, but screenshots of the
   same ad at different scroll positions differ by 17-36 bits and are NOT caught (they fall through to similarity).
   Saved web cases get `meta.json` (`status: unconfirmed`, or `duplicate_of`); duplicates are excluded from the database.
-- Not done: face reference set (DeepFace not installed), per-campaign thresholds, ad-library scheduler.
+- Not done: face reference set with names (deliberately: names come from text; likeness.py matches faces without
+  names and showed that a likeness does not separate campaigns), per-campaign thresholds, ad-library scheduler.
 - Schema: optional, code-owned `technical_artifacts.page_fingerprints` (both schemas); kept out of the LLM prompt
   (`extract.CODE_ONLY_TECH_KEYS`). `domain_and_cert_metadata` holds prefixed facts (see domain_meta.py). Variant
   staleness (`generate.profile_sha`) ignores both, so `enrich` keeps variants fresh. Run `enrich` after `assemble`

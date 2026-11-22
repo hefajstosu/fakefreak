@@ -26,6 +26,8 @@ limits. Licences of the Python packages below were read from the installed packa
 | Cert Spotter API (SSLMate) / crt.sh (Sectigo) | Certificate Transparency records | free tier without a key, rate limited / public service |
 | Wayback Machine CDX API (Internet Archive) | first archived snapshot | Internet Archive terms of use |
 | CERT Polska warning list (hole.cert.pl) | known dangerous domains | public list published by CERT Polska; checked locally, not redistributed |
+| YuNet face detector (OpenCV Model Zoo, `face_detection_yunet_2023mar.onnx`) | find faces for the likeness report | MIT; downloaded on demand, not shipped |
+| SFace face features (OpenCV Model Zoo, `face_recognition_sface_2021dec.onnx`) | compare faces across materials, no names | Apache-2.0; downloaded on demand, not shipped |
 | faster-whisper (optional, not used yet) | speech to text | MIT |
 | DeepFace (optional, not installed) | face matching against a small public-figure set | MIT code; model weights have their own terms, check before use |
 

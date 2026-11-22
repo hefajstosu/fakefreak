@@ -247,12 +247,33 @@ registration batch (the gold same-campaign pair) and otherwise describes: every 
 new features left the grouping metrics unchanged (campaign precision 1.00, families F1 0.92, no false joins) while
 every link now has more, and more varied, evidence behind it.
 
+### Likeness of people: the same face in two materials (`python -m ads.preprocess.likeness`)
+The task lists the likenesses of people among the features. Names already come from page text, captions and
+transcripts (17 of 19 people in the samples); the open question was whether the same face links materials. Faces are
+found with YuNet and compared with SFace (OpenCV Model Zoo, run by OpenCV, about 39 MB, no TensorFlow), with no names
+and no reference set: same person when the cosine reaches 0.363 (OpenCV's published threshold). Measured on the samples:
+
+| faces from | same campaign | same scheme | unrelated (false hits) |
+|---|---:|---:|---:|
+| ad screenshots and video frames | 0/1 | 0/5 | 1/15 |
+| saved landing-page images | 2/2 | 8/8 | 4/18 |
+| all | 2/3 | 8/10 | 6/32 |
+
+The same face appears across unrelated campaigns (a public figure's likeness is reused across schemes), and the three
+health videos show three different people, so a likeness describes the scheme and misleads as campaign evidence about
+as often as persuasion devices do (6/32 against 7/32). It is extracted and reported, not scored. A reference set with
+names (the organiser's suggestion) would only add names that the text already gives in most cases, at the cost of
+identifying people biometrically; it is left out on purpose (`preprocess/faces.py` remains as the optional DeepFace path).
+Face features are biometric data: computed locally, cached only in the gitignored `.cache/likeness`, never written to
+profiles, the repository or the panel.
+
 ## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal
   synthetic data.
 - The organiser's sample data is not redistributed: it and everything derived from it are gitignored; the repository
   holds code, schemas, prompts, a label-only gold file and synthetic tests.
 - Free-tier LLM inputs may be used by the provider to improve its products; this is noted for any real deployment.
+- Faces are compared only locally and without names (no identification); their features stay in a gitignored cache.
 - Domain metadata comes from public registries and logs queried by domain name or public IP only; the scam site is
   never contacted by that module, private addresses are never looked up, and the CERT Polska list is checked locally.
 - Dependency licences are listed in `docs/LICENSES.md`.
