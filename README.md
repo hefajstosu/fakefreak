@@ -55,7 +55,9 @@ Per case, a `data/cases/<id>/manifest.json` lists the files (see the docstring o
 ## Run
 ```
 cd src
-python -m ads.preprocess.assemble --all                 # manifests -> case_input.json
+python -m ads.preprocess.assemble --all [--domain-meta] # manifests -> case_input.json (+ public domain metadata)
+python -m ads.preprocess.enrich --all --domain-meta     # add page fingerprints / domain metadata to existing cases, no LLM
+python -m ads.features                                  # usefulness of every feature against the gold labels
 python -m ads.llm.extract ../data/cases/48/case_input.json ../data/cases/48/profile.json
 python -m ads.llm.generate 48 --n 3 --k 2               # variants
 python -m ads.evaluate --matrix                         # metrics vs gold
@@ -78,4 +80,5 @@ clustering, evaluation and the demo unchanged.
 
 ## Docs
 `docs/METHODOLOGY.md` (approach, evaluation, limits), `docs/DEMO.md` (demo script and fallback plan), `docs/CONTRIBUTING.md`,
-`docs/LICENSES.md`, `docs/DEPLOYMENT.md` (container, configuration, security, scaling).
+`docs/LICENSES.md`, `docs/DEPLOYMENT.md` (container, configuration, security, scaling), `docs/DATA_SOURCES.md`
+(sources with measured coverage), `docs/CAMPAIGN_PATTERNS.md` (patterns found in the samples).

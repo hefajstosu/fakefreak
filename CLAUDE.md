@@ -18,6 +18,8 @@ prompts/extraction.txt        system prompt: case -> profile JSON (closed enums,
 prompts/alternatives.txt      system prompt: profile -> N counterfactual variants
 schemas/*.schema.json         THE CONTRACTS: case_input, profile, variant (JSON Schema)
 src/ads/preprocess/           assemble.py (manifest -> case_input), har.py (HAR -> traces), video.py (contact sheet),
+                              page_fp.py (page structure MinHash + image kit), domain_meta.py (RDAP/DNS/CT/Wayback/
+                              CERT Polska list, cached in .cache/domain_meta), enrich.py (adds both to existing cases, no LLM),
                               transcribe.py (audio -> transcript via LLM), url_scan.py (live URL -> text + traces), faces.py (DeepFace, optional, not installed)
 src/ads/llm/                  client.py (provider-agnostic, disk cache, retries), extract.py, generate.py
 src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
@@ -37,6 +39,7 @@ src/ads/explain.py            reporting only: why a pair scores what it does, wh
 src/ads/robustness.py         channel ablation + missing-data tests
 src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
 src/ads/quality.py            the organiser's test replayed: leave-one-out, variants as new material, must-not-link
+src/ads/features.py           per-feature usefulness (coverage, AUC, false hits) against gold
 src/ads/app.py                Streamlit demo
 src/ads/web/                  web panel: server.py (stdlib JSON API on 127.0.0.1) + static/ page; logic in analyze.py (no UI, tested)
 config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
@@ -156,6 +159,10 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   same ad at different scroll positions differ by 17-36 bits and are NOT caught (they fall through to similarity).
   Saved web cases get `meta.json` (`status: unconfirmed`, or `duplicate_of`); duplicates are excluded from the database.
 - Not done: face reference set (DeepFace not installed), per-campaign thresholds, ad-library scheduler.
+- Schema: optional, code-owned `technical_artifacts.page_fingerprints` (both schemas); kept out of the LLM prompt
+  (`extract.CODE_ONLY_TECH_KEYS`). `domain_and_cert_metadata` holds prefixed facts (see domain_meta.py). Variant
+  staleness (`generate.profile_sha`) ignores both, so `enrich` keeps variants fresh. Run `enrich` after `assemble`
+  for old cases; it needs the raw samples (`fakes/`) next to `data/`.
 - The teammates' earlier analysis (entity masking, rarity weighting, per-campaign thresholds, hierarchy) is in git
   history: `git show 8837ebb:analiza_algorytmu.md`.
 

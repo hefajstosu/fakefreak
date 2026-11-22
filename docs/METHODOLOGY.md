@@ -31,6 +31,10 @@ own: `case_input`, `profile`, `variant`.
 | Persuasion devices | countdown, limited stock, fake comments, fake expert, price anchoring | medium weight; cheap for operators to reuse, so they link campaigns across products |
 | Surface entities | people, product, companies, impersonated media, amounts | supporting evidence; operators swap these freely |
 | Technical traces | tracker IDs, redirect chain, form and platform endpoints, first-party scripts, sender page | hard evidence, extracted by code |
+| Page fingerprints | page skeleton (MinHash of tag paths and CSS classes), page image kit (hashes of large images) | extracted by code from saved pages, HAR logs and the live scan; a shared kit links a family |
+| Tracking template | the operator's own tracking parameter set, ad platform campaign IDs in the funnel URLs | an own template links a family, one ad campaign ID a campaign |
+| Domain and infrastructure metadata | registration date, age at capture, registrar, registration batch, name servers, hosting network, certificates and their other domains, first archive snapshot, CERT Polska warning list | public sources without keys (`docs/DATA_SOURCES.md`); reported, linking only through a registration batch or a shared certificate; CDNs never link |
+| Logos and badges | channel logos, LIVE banners, AI labels on the creative | measured and explained, weight 0 (they do not separate campaigns) |
 | Excluded | demographics of unidentified people, screenshot artefacts, mass infrastructure | zero weight by design |
 
 Demographics of unidentified people are recorded in a separate bucket that similarity never reads, so a variant that
@@ -196,12 +200,61 @@ case; a new ad of a known campaign with no shared trace and a different template
 0.30); the pairs 48-61 and 14-47 ("same template" in gold) are not joined as campaigns by content alone. Both are the
 target of semantic text similarity (E5 embeddings, implemented in `sim_functions/embeddings.py`, not yet used).
 
+### Features and sources, measured
+Every feature is measured on its own against the gold labels (`python -m ads.features`): how many cases have it, how
+far it separates same-campaign pairs from unrelated ones (AUC) and how often it would mislead (unrelated pairs scoring
+0.5 or more). New features were added with weights fixed by analogy before measuring (page structure as the landing
+template, page images as the other first-party traces) and kept only where they did not mislead; logos and domain
+metadata are measured and shown but carry weight 0. The sources behind the features, with their coverage, are in
+`docs/DATA_SOURCES.md`; the patterns they revealed are in `docs/CAMPAIGN_PATTERNS.md`.
+
+Feature usefulness on 10 cases (`python -m ads.features`). Strict pairs per feature are few (at most 3 in the sample gold), so AUC is indicative; coverage and false hits are exact.
+
+| feature | weight | coverage | comparable pairs | strict | same scheme | unrelated | AUC | false hits |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| call_to_action | 0.5 | 100% | 100% | 0.50 | 0.29 | 0.08 | 1.00 | 0/32 |
+| dom_and_form_clues | 0.8 | 70% | 47% | 0.14 | 0.10 | 0.00 | 1.00 | 0/15 |
+| keywords | 0.3 | 100% | 100% | 0.43 | 0.30 | 0.03 | 1.00 | 0/32 |
+| landing_page_template | 0.8 | 90% | 80% | 1.00 | 1.00 | 0.00 | 1.00 | 0/25 |
+| scam_type | 1.0 | 100% | 100% | 1.00 | 1.00 | 0.00 | 1.00 | 0/32 |
+| url_template | 0.5 | 70% | 47% | 0.50 | 0.58 | 0.00 | 1.00 | 0/15 |
+| topic | 0.5 | 100% | 100% | 1.00 | 1.00 | 0.16 | 0.92 | 5/32 |
+| persuasion_devices | 0.5 | 100% | 100% | 0.62 | 0.51 | 0.33 | 0.90 | 7/32 |
+| page_structure | 0.8 | 90% | 80% | 0.64 | 0.21 | 0.10 | 0.89 | 0/25 |
+| featured_people | 0.8 | 90% | 100% | 0.44 | 0.18 | 0.00 | 0.83 | 0/32 |
+| page_assets | 0.8 | 90% | 80% | 0.31 | 0.02 | 0.00 | 0.83 | 0/25 |
+| product_name | 1.0 | 100% | 100% | 0.43 | 0.10 | 0.00 | 0.83 | 0/32 |
+| impersonated_media | 0.8 | 70% | 93% | 0.67 | 0.33 | 0.12 | 0.78 | 5/30 |
+| companies | 0.8 | 80% | 98% | 0.32 | 0.31 | 0.06 | 0.78 | 2/32 |
+| embedding | 0.8 | 100% | 100% | 0.23 | 0.23 | 0.18 | 0.76 | 0/32 |
+| infra_metadata | 0.0 | 70% | 47% | 0.25 | 0.00 | 0.00 | 0.75 | 0/15 |
+| promise | 0.8 | 100% | 100% | 0.27 | 0.23 | 0.10 | 0.74 | 0/32 |
+| setting_and_props | 0.3 | 100% | 100% | 0.24 | 0.16 | 0.07 | 0.72 | 2/32 |
+| amounts_dates_locations | 0.2 | 100% | 100% | 0.45 | 0.36 | 0.22 | 0.68 | 1/32 |
+| narrative | 0.8 | 100% | 100% | 0.23 | 0.19 | 0.10 | 0.67 | 0/32 |
+| funnel_stages | 0.3 | 100% | 100% | 0.44 | 0.62 | 0.47 | 0.55 | 16/32 |
+| ad_library_page_name | 0.7 | 70% | 47% | 0.00 | 0.00 | 0.00 | 0.50 | 0/15 |
+| redirect_chain_domains | 0.9 | 70% | 47% | 0.00 | 0.00 | 0.00 | 0.50 | 0/15 |
+| ad_creative_template | 0.8 | 100% | 100% | 0.00 | 0.20 | 0.12 | 0.44 | 4/32 |
+| logos_and_badges | 0.0 | 70% | 93% | 0.00 | 0.10 | 0.07 | 0.43 | 2/30 |
+| tracker_ids | 1.0 | 30% | 7% | 1.00 | 0.00 | – | – | 0/0 |
+
+Reading: content features from the LLM carry the scheme (scam type, landing template, call to action, keywords: AUC
+1.00, no false hits); the new code-extracted page fingerprints and the tracking template separate as well without a
+single false hit (AUC 0.83 to 1.00); persuasion devices and funnel stages describe the genre and mislead on unrelated
+pairs; the ad creative template and logos do not separate campaigns at all. Domain metadata separates through the
+registration batch (the gold same-campaign pair) and otherwise describes: every page sits behind one CDN. Adding the
+new features left the grouping metrics unchanged (campaign precision 1.00, families F1 0.92, no false joins) while
+every link now has more, and more varied, evidence behind it.
+
 ## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal
   synthetic data.
 - The organiser's sample data is not redistributed: it and everything derived from it are gitignored; the repository
   holds code, schemas, prompts, a label-only gold file and synthetic tests.
 - Free-tier LLM inputs may be used by the provider to improve its products; this is noted for any real deployment.
+- Domain metadata comes from public registries and logs queried by domain name or public IP only; the scam site is
+  never contacted by that module, private addresses are never looked up, and the CERT Polska list is checked locally.
 - Dependency licences are listed in `docs/LICENSES.md`.
 
 ## 12. Limitations and next steps

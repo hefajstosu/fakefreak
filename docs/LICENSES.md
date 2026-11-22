@@ -21,6 +21,11 @@ limits. Licences of the Python packages below were read from the installed packa
 | python:3.12-slim-bookworm (container base) | runtime image | Python: PSF-2.0; Debian packages: their own free licences (Debian policy) |
 | uv (developer tool, not shipped) | compiles `requirements.lock` | Apache-2.0 / MIT |
 | GitHub Actions (CI) | tests on 3 systems, container smoke test | GitHub terms of service |
+| rdap.org and the registries' RDAP servers | domain registration, IP network | public service; registry terms of use; rate limited |
+| Google Public DNS (DNS over HTTPS) | does a domain resolve | Google Public DNS terms |
+| Cert Spotter API (SSLMate) / crt.sh (Sectigo) | Certificate Transparency records | free tier without a key, rate limited / public service |
+| Wayback Machine CDX API (Internet Archive) | first archived snapshot | Internet Archive terms of use |
+| CERT Polska warning list (hole.cert.pl) | known dangerous domains | public list published by CERT Polska; checked locally, not redistributed |
 | faster-whisper (optional, not used yet) | speech to text | MIT |
 | DeepFace (optional, not installed) | face matching against a small public-figure set | MIT code; model weights have their own terms, check before use |
 
