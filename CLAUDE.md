@@ -1,5 +1,7 @@
 # CLAUDE.md: guide for Claude Code sessions in this repo
 
+> **Working on the similarity? Read `docs/SIMILARITY_BRIEF.md` first** (contract, baseline numbers, commands, hypotheses, guardrails).
+
 ## What this project is
 HackNation 2026 task "Kolekcjoner fejków / Follow the Fake" (NASK). Scam ads come as **cases** (ad screenshot or video,
 landing pages, network logs). An LLM turns each case into a structured **profile**; profiles are compared and

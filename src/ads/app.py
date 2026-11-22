@@ -74,10 +74,19 @@ STATUS_BOX = {"duplicate": st.success, "same_content": st.success, "confirmed": 
               "suggested_family": st.warning, "new_unconfirmed": st.warning}
 
 
-def show_neighbours(profile, db, tau, dups=None):
-    """Compare with the database, show the graded decision, return it."""
+def compute_decision(profile, db, tau, dups=None):
+    """Compare with the database (no rendering): returns (neighbour result, graded decision)."""
     res = clu.assign(profile, db, tau)
-    decision = dec.decide(res["neighbours"], dups or [], likely=tau)
+    return res, dec.decide(res["neighbours"], dups or [], likely=tau)
+
+
+def show_neighbours(profile, db, tau, dups=None):
+    res, decision = compute_decision(profile, db, tau, dups)
+    return render_neighbours(res, decision, db, tau, dups)
+
+
+def render_neighbours(res, decision, db, tau, dups=None):
+    """Show the graded decision and the closest cases, return the decision."""
     STATUS_BOX[decision["status"]](f"**{decision['title']}**  \n{decision['explanation']}")
     if dups:
         st.caption("Duplicate check: " + "; ".join(f"case {d['case']}: {', '.join(d['reasons'])}" for d in dups))
@@ -199,8 +208,27 @@ with tab1:
         if not KEY_OK:
             st.error("No LLM key configured, so new material cannot be analysed here. Use a sample case, or add "
                      "GEMINI_API_KEY to .env and restart.")
-        if st.button("Analyse", type="primary", disabled=not KEY_OK):
+        c_analyse, c_save, _ = st.columns([1, 3, 4])
+        analyse = c_analyse.button("Analyse", type="primary", disabled=not KEY_OK)
+        pending = None
+        if "new_profile" in st.session_state:
+            # a result is on screen: the Save button sits right next to Analyse
+            prof = st.session_state["new_profile"]
+            dups = dedup.find_duplicates(dedup.fingerprint(st.session_state["new_case"]), fingerprints())
+            res, decision = compute_decision(prof, db, tau, dups)
+            pending = (prof, res, decision, dups)
+            if st.session_state.get("saved_id"):
+                c_save.success(f"Saved as {st.session_state['saved_id']} (local data/cases/, not shared via git)")
+            else:
+                dup = decision["status"] == "duplicate"
+                lbl = f"Save as duplicate of case {decision['join'][0]}" if dup else "Save to database"
+                if c_save.button(lbl, help="Adds this scan to the database so later cases are compared with it. "
+                                           "New or uncertain campaigns are saved as unconfirmed."):
+                    st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof, decision)
+                    st.rerun()
+        if analyse:
             case = build_case(files, url, text, product)
+            done = False
             if not case:
                 st.error("Give at least a screenshot, a URL, some text or a product name.")
             else:
@@ -209,31 +237,23 @@ with tab1:
                         from ads.llm.client import make_client
                         from ads.llm.extract import extract
                         client = make_client() if model.startswith("auto") else make_client(extraction_model=model)
-                        prof = extract(case, client)
-                        st.session_state["new_profile"] = prof
+                        st.session_state["new_profile"] = extract(case, client)
                         st.session_state["new_case"] = case
                         st.session_state.pop("saved_id", None)
+                        done = True
                     except QuotaExhausted as e:
                         st.error("Every configured model is out of free quota right now (it resets about 09:00 Warsaw time). "
                                  "Sample cases still work; analyses you already ran are cached and free. "
                                  f"Details: {str(e)[:200]}")
                     except Exception as e:  # noqa: BLE001
                         st.error(f"Extraction failed: {str(e)[:400]}")
-        if "new_profile" in st.session_state:
-            prof = st.session_state["new_profile"]
+            if done:
+                st.rerun()  # redraw so the Save button appears next to Analyse for the new result
+        if pending and not analyse:
+            prof, res, decision, dups = pending
             show_profile(prof)
             st.subheader("Comparison with the database")
-            new_fp = dedup.fingerprint(st.session_state["new_case"])
-            decision = show_neighbours(prof, db, tau, dedup.find_duplicates(new_fp, fingerprints()))
-            if st.session_state.get("saved_id"):
-                st.success(f"Saved to the database as {st.session_state['saved_id']} (data/cases/, not shared via git).")
-            else:
-                dup = decision["status"] == "duplicate"
-                lbl = f"Save as duplicate of case {decision['join'][0]}" if dup else "Save to database"
-                if st.button(lbl, help="Adds this scan to the database so later cases are compared with it. "
-                                       "New or uncertain campaigns are saved as unconfirmed."):
-                    st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof, decision)
-                    st.rerun()
+            render_neighbours(res, decision, db, tau, dups)
 
 with tab2:
     scores = clu.pair_scores(db)
