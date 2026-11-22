@@ -114,3 +114,15 @@ def test_campaigns_are_clustered_once_per_database_state(monkeypatch):
     an.compare(make(), None, {**DB, "d": make(product="Other")}, 0.6, fingerprints={})
     an.compare(make(), None, DB, 0.5, fingerprints={})
     assert len(calls) == 3                      # a saved case or another threshold clusters again
+
+
+def test_compare_explains_the_decision_and_every_campaign():
+    an._PAIRS.clear()
+    an._GROUPS.clear()
+    r = an.compare(make(product="AlphaPlat"), None, DB, 0.6, fingerprints={})
+    assert r["reasons"]["status"] == r["decision"]["status"] and r["reasons"]["thresholds"]["tau"] == 0.6
+    rows = {tuple(c["members"]): c for c in r["campaigns"]}
+    assert rows[("a", "b")]["joined"] and rows[("a", "b")]["rule"] == "mean score >= tau"
+    assert not rows[("c",)]["joined"] and rows[("c",)]["gap"] > 0
+    g = {tuple(x["members"]): x["explanation"] for x in an.groups_overview(DB, 0.6)}
+    assert g[("a", "b")]["rule"] == "mean score" and g[("c",)]["nearest"]["members"] == ["a", "b"]

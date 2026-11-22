@@ -22,7 +22,7 @@ from collections import Counter
 from itertools import combinations
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from . import clustering, decision, dedup
+from . import clustering, decision, dedup, explain
 from .paths import CASES, DATA
 from .preprocess.har import host, reg_domain
 
@@ -139,12 +139,16 @@ def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], prof
             variants: Optional[Dict[str, List[dict]]] = None,
             fingerprints: Optional[Dict[str, dict]] = None) -> Dict[str, Any]:
     """Compare a profile with the database (no LLM): duplicates of its capture, nearest cases, the campaigns it
-    joins and the graded decision. `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
+    joins and the graded decision, plus why: "reasons" (the decision rule and its numbers) and "campaigns" (per
+    campaign, joined or not and on which rule; see explain.py). `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
     `fingerprints` defaults to those of the cases on disk."""
     dups = dedup.find_duplicates(fingerprint, _database_fingerprints(profiles, fingerprints)) if fingerprint else []
     res = clustering.assign(profile, profiles, tau, groups=campaigns(profiles, tau, variants), variants=variants)
-    return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"],
-            "decision": decision.decide(res["neighbours"], dups, likely=tau)}
+    hard = [(c, r) for c, r in res["scores"].items() if clustering.is_must_link(r)]
+    dec = decision.decide(res["neighbours"], dups, likely=tau, hard=hard)
+    return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"], "decision": dec,
+            "reasons": explain.decision_reasons(dec, res["neighbours"], tau),
+            "campaigns": explain.assignment(res, tau)}
 
 
 def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=None,
@@ -168,7 +172,8 @@ def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=
 
 def groups_overview(profiles: Dict[str, dict], tau: float, family_tau: float = decision.FAMILY_SCORE,
                     variants: Optional[Dict[str, List[dict]]] = None) -> List[Dict[str, Any]]:
-    """Campaigns at tau, largest family first; each with its family number, members and the evidence that links them."""
+    """Campaigns at tau, largest family first; each with its family number, members, the evidence that links them
+    and its explanation (explain.campaign: signature, cohesion, hard links, nearest other campaign)."""
     scores = pair_table(profiles, variants)
     groups = campaigns(profiles, tau, variants)
     out = []
@@ -179,7 +184,8 @@ def groups_overview(profiles: Dict[str, dict], tau: float, family_tau: float = d
                       "evidence": clustering.pair(scores, a, b)["strong_links"]} for a, b in combinations(members, 2)]
             scam = Counter(profiles[c]["core_narrative"]["ad_goal_scam_type"] for c in members).most_common(1)[0][0]
             out.append({"family": fam_no, "members": members, "scam_type": scam,
-                        "links": sorted(links, key=lambda x: -x["score"])})
+                        "links": sorted(links, key=lambda x: -x["score"]),
+                        "explanation": explain.campaign(members, profiles, scores, tau, groups)})
     return out
 
 

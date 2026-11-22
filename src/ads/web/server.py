@@ -4,9 +4,13 @@
 
 API
   GET  /api/status                 {"cases": n, "llm": bool}
-  GET  /api/groups?tau=0.6         {"tau", "groups": [{"no", "family", "scam_type", "members": [summary], "links": [...]}]}
-  POST /api/analyze {url, text, tau}   {"id", "notes", "llm_used", "decision", "profile", "neighbours", "joins"}
+  GET  /api/groups?tau=0.6         {"tau", "groups": [{"no", "family", "scam_type", "members": [summary], "links": [...],
+                                    "explanation": explain.campaign()}]}
+  POST /api/analyze {url, text, tau}   {"id", "notes", "llm_used", "decision", "reasons", "campaigns", "profile",
+                                    "neighbours": [{..., "explanation": explain.pair()}], "joins", "thresholds"}
   POST /api/save {id}              {"case_id"}
+  GET  /api/explain?a=&b=&tau=     explain.pair() of two database cases; a=new&id=<analysis id> for the analysed article
+  GET  /api/graph?tau=0.6          {"nodes": [...], "edges": [...]}: cases, campaigns, families and the links between them
   GET  /api/image/<case_id>        first screenshot of a database case
 
 It listens on 127.0.0.1 by default: the page shows organiser sample data, which must not be published. The container
@@ -24,11 +28,14 @@ from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlsplit
 
 from .. import analyze as an
+from .. import decision, explain
 from ..evaluate import case_meta, load_profiles
 from ..llm.client import QuotaExhausted, load_env, make_client
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_BODY = 200_000
+MAX_PENDING = 50    # unsaved analyses kept in memory (oldest dropped first)
+GRAPH_EDGES_PER_CASE = 4  # weaker links than these per case are left out of the graph (hard evidence always stays)
 
 
 class State:
@@ -65,14 +72,64 @@ def parse_tau(value) -> float:
     return round(tau, 2)
 
 
-def groups_payload(state: State, tau: float) -> Dict[str, Any]:
+def overview(state: State, tau: float) -> list:
     with state.lock:
         if tau not in state.groups:
             state.groups[tau] = an.groups_overview(state.profiles, tau)
-        groups = state.groups[tau]
+        return state.groups[tau]
+
+
+def groups_payload(state: State, tau: float) -> Dict[str, Any]:
     return {"tau": tau, "groups": [{"no": i, "family": g["family"], "scam_type": g["scam_type"], "links": g["links"],
+                                    "explanation": g["explanation"],
                                     "members": [summary(c, state.profiles[c]) for c in g["members"]]}
-                                   for i, g in enumerate(groups, 1)]}
+                                   for i, g in enumerate(overview(state, tau), 1)]}
+
+
+def campaign_numbers(state: State, tau: float) -> Dict[frozenset, int]:
+    """{members: K number shown in the groups tab}."""
+    return {frozenset(g["members"]): i for i, g in enumerate(overview(state, tau), 1)}
+
+
+def graph_payload(state: State, tau: float) -> Dict[str, Any]:
+    """Cases as nodes (with campaign and family), links as edges: every pair with hard evidence, plus each case's
+    strongest links at or above the family threshold (at most GRAPH_EDGES_PER_CASE per case)."""
+    groups = overview(state, tau)
+    where = {c: (i, g["family"]) for i, g in enumerate(groups, 1) for c in g["members"]}
+    nodes = [{"case": c, "campaign": where[c][0], "family": where[c][1], **{k: an.case_summary(c, p)[k]
+             for k in ("scam_type", "product")}} for c, p in sorted(state.profiles.items())]
+    table = an.pair_table(state.profiles)
+    keep = {k for k, r in table.items() if r["strong_links"]}
+    near: Dict[str, list] = {}
+    for k, r in table.items():
+        if r["score"] >= decision.FAMILY_SCORE:
+            for c in k:
+                near.setdefault(c, []).append((r["score"], k))
+    for links in near.values():
+        keep |= {k for _, k in sorted(links, reverse=True)[:GRAPH_EDGES_PER_CASE]}
+    edges = [{"a": a, "b": b, "score": table[(a, b)]["score"], "evidence": table[(a, b)]["strong_links"],
+              "must_link": an.clustering.is_must_link(table[(a, b)]), "same_campaign": where[a][0] == where[b][0]}
+             for a, b in sorted(keep)]
+    return {"tau": tau, "family_score": decision.FAMILY_SCORE, "nodes": nodes, "edges": edges}
+
+
+def explain_payload(state: State, query: Dict[str, list]) -> Dict[str, Any]:
+    q = {k: v[0] for k, v in query.items()}
+    tau = parse_tau(q.get("tau", "0.6"))
+    a, b = q.get("a", ""), q.get("b", "")
+    if b not in state.profiles:
+        raise KeyError(f"unknown case: {b}")
+    if a == "new":
+        with state.lock:
+            item = state.pending.get(q.get("id", ""))
+        if item is None:
+            raise KeyError("This analysis is unknown or already saved; run it again.")
+        pa = item[1]["profile"]
+    elif a in state.profiles:
+        pa = state.profiles[a]
+    else:
+        raise KeyError(f"unknown case: {a}")
+    return {"a": a, "b": b, **explain.pair(pa, state.profiles[b], tau)}
 
 
 def analyze_payload(state: State, body: dict) -> Dict[str, Any]:
@@ -84,11 +141,19 @@ def analyze_payload(state: State, body: dict) -> Dict[str, Any]:
     aid = uuid.uuid4().hex
     with state.lock:
         state.pending[aid] = (case, res)
+        while len(state.pending) > MAX_PENDING:
+            del state.pending[next(iter(state.pending))]
+    numbers = campaign_numbers(state, tau)
     return {"id": aid, "notes": notes, "llm_used": res["llm_used"],
             "decision": {k: res["decision"][k] for k in ("status", "title", "explanation")},
+            "reasons": res["reasons"], "thresholds": res["reasons"]["thresholds"],
+            "campaigns": [{**row, "no": numbers.get(frozenset(row["members"]))} for row in res["campaigns"]],
             "profile": summary("new", res["profile"]), "joins": res["joins"],
             "neighbours": [{"case": c, "score": round(r["score"], 3), "evidence": r["strong_links"],
-                            "product": an.case_summary(c, state.profiles[c])["product"]} for c, r in res["neighbours"]]}
+                            "campaign": next((n for m, n in numbers.items() if c in m), None),
+                            "product": an.case_summary(c, state.profiles[c])["product"],
+                            "explanation": explain.pair(res["profile"], state.profiles[c], tau)}
+                           for c, r in res["neighbours"]]}
 
 
 def save_payload(state: State, body: dict) -> Dict[str, Any]:
@@ -132,6 +197,10 @@ def make_handler(state: State):
                     return self.send_json(200, {"cases": len(state.profiles), "llm": bool(os.environ.get("GEMINI_API_KEY"))})
                 if parts.path == "/api/groups":
                     return self.send_json(200, groups_payload(state, parse_tau(parse_qs(parts.query).get("tau", ["0.6"])[0])))
+                if parts.path == "/api/explain":
+                    return self.send_json(200, explain_payload(state, parse_qs(parts.query)))
+                if parts.path == "/api/graph":
+                    return self.send_json(200, graph_payload(state, parse_tau(parse_qs(parts.query).get("tau", ["0.6"])[0])))
                 if parts.path.startswith("/api/image/"):
                     cid = parts.path.rsplit("/", 1)[1]
                     path = an.first_image(cid) if cid in state.profiles else None  # only cases of the database
