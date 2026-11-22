@@ -89,3 +89,8 @@ def test_must_link_evidence_confirms_whatever_the_score_and_every_result_names_i
     assert decide(low, [], likely=0.6)["rule"] == "nothing"
     assert decide([("c1", R(0.85))], [])["rule"] == "score_confirm"
     assert decide([("c1", R(0.6, ["shared domain: d.test"]))], [], likely=0.6)["rule"] == "tau_and_evidence"
+
+
+def test_family_evidence_suggests_the_family_and_names_the_case():
+    d = decide([("c1", R(0.2))], [], likely=0.6, family_links=[("c4", R(0.25, ["shared session/form endpoint: POST */a/"]))])
+    assert d["status"] == "suggested_family" and d["rule"] == "family_evidence" and d["family_case"] == "c4"

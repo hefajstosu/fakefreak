@@ -10,13 +10,14 @@ Statuses, strongest first:
                      or score >= confirm_score, or must-link evidence with any case (`hard`, the same rule that joins
                      a campaign in clustering, so the verdict never contradicts the campaign the article joins)
   likely             score >= likely but no hard evidence
-  suggested_family   score >= family: related to a known family, too weak to call it the same campaign
+  suggested_family   family-level evidence (shared platform endpoints, same scam type) with any case, or score >=
+                     family: related to a known family, too weak to call it the same campaign
   new_unconfirmed    nothing close: a new campaign candidate, to be confirmed by an analyst
 
 The missing-data tests showed that a case with only an ad creative scores below the usual threshold yet still has
 the right family as its nearest neighbour; `suggested_family` exists for exactly that situation.
 Every result has "rule": the condition that fired (capture, content, empty, score_confirm, tau_and_evidence,
-hard_evidence, tau_only, family, nothing), which the panel and explain.decision_reasons show.
+hard_evidence, tau_only, family_evidence, family, nothing), which the panel and explain.decision_reasons show.
 """
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -30,8 +31,10 @@ def _top(neighbours: List[Tuple[str, Dict[str, Any]]], n: int = 3) -> List[Dict[
 
 def decide(neighbours: List[Tuple[str, Dict[str, Any]]], duplicates: List[Dict[str, Any]],
            likely: float = 0.55, family: float = FAMILY_SCORE, confirm: float = CONFIRM_SCORE,
-           hard: Optional[List[Tuple[str, Dict[str, Any]]]] = None) -> Dict[str, Any]:
-    """`hard`: (case, score result) of every database case with must-link evidence to this one (may be empty)."""
+           hard: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
+           family_links: Optional[List[Tuple[str, Dict[str, Any]]]] = None) -> Dict[str, Any]:
+    """`hard`: (case, score result) of every database case with must-link evidence to this one (may be empty).
+    `family_links`: the same for family-level evidence (shared platform endpoints, same scam type)."""
     matches = _top(neighbours)
     capture = [d for d in duplicates if any(r.startswith(("near-identical image", "same final URL")) for r in d["reasons"])]
     if capture:
@@ -70,6 +73,15 @@ def decide(neighbours: List[Tuple[str, Dict[str, Any]]], duplicates: List[Dict[s
                 "explanation": f"Score {s:.2f} from similar content, but no hard technical evidence (tracker, domain, "
                                "platform endpoints). An analyst should confirm.",
                 "join": [c for c, r in neighbours if r["score"] >= likely], "matches": matches, "related": []}
+    if family_links:
+        fc, fr = max(family_links, key=lambda kv: kv[1]["score"])
+        return {"status": "suggested_family", "rule": "family_evidence", "family_case": fc, "family_score": fr["score"],
+                "family_links": fr["strong_links"],
+                "title": f"Same family as case {fc}: shared landing-page tool, unconfirmed as the same campaign",
+                "explanation": f"Shared platform endpoints with case {fc} ({'; '.join(fr['strong_links'])}) show the same "
+                               f"landing-page tool and the same scam type; the content score ({fr['score']:.2f}) is too "
+                               "low to call it the same campaign.",
+                "join": [], "matches": matches, "related": []}
     if s >= family:
         return {"status": "suggested_family", "rule": "family", "title": f"Possibly related to case {cid}: treat as unconfirmed",
                 "explanation": f"Best score {s:.2f} is below the threshold {likely:.2f}. The material resembles a known family "

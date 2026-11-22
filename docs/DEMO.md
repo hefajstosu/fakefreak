@@ -21,7 +21,8 @@
 ## Walkthrough (Streamlit demo)
 1. **The idea (30 s).** Many ads look independent; they share traces. We turn each case into a structured profile and
    compare profiles, with every link explained by evidence.
-2. **Analyse tab, sample case 48.** Banner: *confirmed* against case 1 with hard evidence (shared platform endpoints).
+2. **Analyse tab, sample case 48.** Banner: *suggested family* with cases 1, 2 and 61: shared platform endpoints (the same
+   landing-page tool) and the same scam type, but no proof of one operator, so a family and not the same campaign.
    Open the neighbours: strong evidence and the features that contributed. Point out that the people and the product
    differ, yet the campaign is linked through infrastructure and template.
 3. **Sample cases 1 and 2.** Banner: *same content on another host*. The article is near-identical on a different domain:

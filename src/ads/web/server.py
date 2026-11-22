@@ -108,7 +108,8 @@ def graph_payload(state: State, tau: float) -> Dict[str, Any]:
     for links in near.values():
         keep |= {k for _, k in sorted(links, reverse=True)[:GRAPH_EDGES_PER_CASE]}
     edges = [{"a": a, "b": b, "score": table[(a, b)]["score"], "evidence": table[(a, b)]["strong_links"],
-              "must_link": an.clustering.is_must_link(table[(a, b)]), "same_campaign": where[a][0] == where[b][0]}
+              "must_link": an.clustering.is_must_link(table[(a, b)]),
+              "family_link": an.clustering.is_family_link(table[(a, b)]), "same_campaign": where[a][0] == where[b][0]}
              for a, b in sorted(keep)]
     return {"tau": tau, "family_score": decision.FAMILY_SCORE, "nodes": nodes, "edges": edges}
 
@@ -148,6 +149,7 @@ def analyze_payload(state: State, body: dict) -> Dict[str, Any]:
             "decision": {k: res["decision"][k] for k in ("status", "title", "explanation")},
             "reasons": res["reasons"], "thresholds": res["reasons"]["thresholds"],
             "campaigns": [{**row, "no": numbers.get(frozenset(row["members"]))} for row in res["campaigns"]],
+            "families": res["families"],
             "profile": summary("new", res["profile"]), "joins": res["joins"],
             "neighbours": [{"case": c, "score": round(r["score"], 3), "evidence": r["strong_links"],
                             "campaign": next((n for m, n in numbers.items() if c in m), None),

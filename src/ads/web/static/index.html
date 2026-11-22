@@ -70,15 +70,18 @@
 
         <div class="block">
           <div class="block-head"><h2>Dopasowanie do kampanii</h2><span class="code">reguła grupowania</span></div>
-          <p class="hint block-note">Artykuł dołącza do kampanii, gdy ma twardy dowód (wspólny tracker, endpoint platformy, strona
-            sponsorująca) z którąkolwiek sprawą albo gdy jego <b>średnie</b> podobieństwo do wszystkich spraw kampanii osiąga próg τ.
-            Liczy się średnia, nie najlepsza para, więc jedno przypadkowe podobieństwo nie skleja kampanii.</p>
+          <p class="hint block-note">Artykuł dołącza do kampanii, gdy ma twardy dowód (wspólny tracker lub strona sponsorująca) albo prawie
+            identyczną treść (≥ 0.80) z którąkolwiek sprawą albo gdy jego <b>średnie</b> podobieństwo do wszystkich spraw kampanii osiąga próg τ.
+            Liczy się średnia, nie najlepsza para, więc jedno przypadkowe podobieństwo nie skleja kampanii.
+            Poziom wyżej jest rodzina kampanii: ten sam typ oszustwa i wynik ≥ 0.30 albo wspólne narzędzie do stron
+            (endpointy platformy), które może obsługiwać kilku operatorów.</p>
           <div class="table-wrap">
             <table id="campaigns">
               <thead><tr><th scope="col">Kampania</th><th scope="col">Średnie podobieństwo</th><th scope="col">Twardy dowód</th><th scope="col">Wynik</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
+          <div class="block-foot family-line" id="family-line"></div>
         </div>
 
         <div class="split">
@@ -129,6 +132,7 @@
           <ul class="legend" aria-label="Legenda">
             <li><span class="ln hard"></span>twardy dowód (łączy niezależnie od wyniku)</li>
             <li><span class="ln same"></span>w tej samej kampanii (średnia ≥ τ)</li>
+            <li><span class="ln famev"></span>wspólne narzędzie do stron (ta sama rodzina)</li>
             <li><span class="ln fam"></span>podobne, różne kampanie (wynik ≥ progu rodziny)</li>
             <li><span class="dot"></span>kolor = kampania; szara ramka = rodzina; grubość = wynik</li>
           </ul>

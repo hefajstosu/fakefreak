@@ -7,7 +7,8 @@ goal is explicitly not a fake/real classifier for a single ad.
 ## 1. Approach in one paragraph
 Each ad **case** (ad screenshot or video, the pages it leads to, recorded or live network traces) is turned into a
 structured **profile** by a multimodal LLM under a strict schema. Profiles are compared with a transparent weighted
-similarity plus hard-evidence rules (tracker IDs, shared platform endpoints, domains, sender page). New items get a
+similarity plus hard-evidence rules (tracker IDs and sender page join campaigns, shared platform endpoints join families
+of campaigns). New items get a
 **graded decision** (duplicate / same content / confirmed / likely / suggested family / new unconfirmed) with an
 explanation made of the evidence that produced it. Everything is evaluated against hand-made gold labels, and the LLM
 steps are validated by code, never trusted blindly.
@@ -49,8 +50,9 @@ changes only those traits must score exactly 1.0 against its parent. This is che
 features that could not be compared, and the strong links. The score is a weighted mean over the features present on
 both sides (null-aware: a feature missing on one side is skipped, not counted as zero); technical anchors (tracker IDs,
 redirect domains, endpoint and form clues, sponsoring page) are features with their own weights. Hard evidence does not
-change the number. It is reported next to it and, in grouping, a shared tracker ID, two or more shared platform endpoint
-prefixes or the same sponsoring page are must-links: they join two cases whatever their score. Shared domains and files
+change the number. It is reported next to it and, in grouping, a shared tracker ID or the same sponsoring page is a
+must-link: it joins two cases into one campaign whatever their score. Two or more shared platform endpoint prefixes
+prove a shared landing-page tool and join two cases of the same scam type into one family (section 10). Shared domains and files
 are supporting evidence only (a mass domain must not chain unrelated campaigns).
 
 ## 6. Live URL scan
@@ -131,7 +133,8 @@ every item is analysed against the database exactly as in the panel (`analyze.co
 against the gold labels: correct, missed (a known campaign was not joined) or false join (joined a campaign it has no
 gold relation to). Items: each real case left out of the database in turn, and the 189 synthetic variants (surface
 details swapped, scam blueprint kept) as new versions of known campaigns, with the parent in the database or held
-out, and with the parent's technical traces (same operator) or without them (new infrastructure). Tau 0.6:
+out, and with the parent's technical traces (same operator) or without them (new infrastructure). Tau 0.6, before the
+endpoint decision further down (the current two-level numbers are in the last table of this section):
 
 | test | n | correct | joined known campaign | false joins |
 |---|---:|---:|---:|---:|
@@ -163,18 +166,35 @@ the gap between same-campaign and unrelated pairs (0.45 / 0.09 to 0.50 / 0.11) a
 tau 0.6 it does not move the last row, so it stays off until the team decides. With it, tau 0.30 to 0.35 gives 1.00 on
 every row with no false joins, again at family-level purity (0.25 to 0.56).
 
-**Open decision: shared platform endpoints.** Purity on leave-one-out is 0.33 even at tau 0.6. The campaign {1, 2, 48,
-61} is one group only because two or more shared platform endpoint paths are a must-link; gold has {1, 2} and {48, 61}
-as two campaigns of one scheme. A shared landing-page tool is not proof of one operator. Treating endpoints as
-supporting evidence only:
+**Decision: shared platform endpoints link families, not campaigns.** With endpoints as a must-link, purity on
+leave-one-out was 0.33: the campaign {1, 2, 48, 61} existed only because the cases share platform endpoint paths, while
+gold has {1, 2} and {48, 61} as two campaigns of one scheme. A shared landing-page tool is not proof of one operator, so
+endpoints now put two cases of the same scam type into one **family** (`clustering.evidence.FAMILY_LINK`, used by
+`hierarchy()`, the "suggested family" verdict and the panel), and only a shared tracker ID or sponsoring page (or a
+near-identical content score) joins a **campaign**. The task asks for grouping "into campaigns or groups of similar
+campaigns", so both levels are results and both are measured: campaigns against the strict gold (same campaign or
+template), families against the broad gold (also same scheme).
 
-| | strict P / R / F1 | purity (LOO / known variants) | leave-one-out correct | held out, new infrastructure |
-|---|---|---|---|---|
-| endpoints are a must-link (now) | 0.33 / 0.67 / 0.44 | 0.33 / 0.80 | 0.80 | 0.40 |
-| endpoints supporting only | 1.00 / 0.33 / 0.50 | 1.00 / 1.00 | 0.60 | 0.56 |
+| level | gold | P / R / F1 before | P / R / F1 now |
+|---|---|---|---|
+| campaigns | strict | 0.33 / 0.67 / 0.44 | **1.00** / 0.33 / **0.50** |
+| families (not measured before) | broad | 1.00 / 0.85 / 0.92 | 1.00 / 0.85 / **0.92** |
 
-Neither dominates: campaign-level precision against recall of related campaigns. It is a modelling choice for the
-team (and a question for the organiser: one operator or one tool?), not a parameter to fit on ten cases.
+New material at both levels (`ads.quality`, tau 0.6; families: correct family or correctly none):
+
+| test | campaigns correct | purity | false joins | families correct | family false joins |
+|---|---:|---:|---:|---:|---:|
+| leave-one-out, real cases | 0.60 | 1.00 | 0.00 | 0.90 | 0.00 |
+| variants, parent known, same infrastructure | 1.00 | 1.00 | 0.00 | 1.00 | 0.00 |
+| variants, parent known, new infrastructure | 1.00 | 1.00 | 0.00 | 1.00 | 0.00 |
+| variants, parent held out, same infrastructure | 0.59 | 1.00 | 0.00 | 0.90 | 0.00 |
+| variants, parent held out, new infrastructure | 0.56 | 1.00 | 0.00 | 0.90 | 0.00 |
+
+Every campaign the system forms or joins is now a gold campaign (purity 1.00) and nothing is ever joined to an unrelated
+case; a new ad of a known campaign with no shared trace and a different template is placed in the right family 9 times in
+10. The remaining family miss is case 14 (scores 0.25 to 0.29 with its partners, just under the family threshold of
+0.30); the pairs 48-61 and 14-47 ("same template" in gold) are not joined as campaigns by content alone. Both are the
+target of semantic text similarity (E5 embeddings, implemented in `sim_functions/embeddings.py`, not yet used).
 
 ## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal
@@ -182,7 +202,7 @@ team (and a question for the organiser: one operator or one tool?), not a parame
 - The organiser's sample data is not redistributed: it and everything derived from it are gitignored; the repository
   holds code, schemas, prompts, a label-only gold file and synthetic tests.
 - Free-tier LLM inputs may be used by the provider to improve its products; this is noted for any real deployment.
-- Dependency licences are listed in `docs/LICENSES.md` (to be verified before submission).
+- Dependency licences are listed in `docs/LICENSES.md`.
 
 ## 12. Limitations and next steps
 Small labelled set and guessed weights; a stronger similarity (semantic embeddings, rarity-weighted evidence,

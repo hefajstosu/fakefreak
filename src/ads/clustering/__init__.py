@@ -13,11 +13,11 @@ other. `variant_gate=0.15` skips the variant comparisons of pairs that score bel
 `ads/cluster.py` only re-exports these names for older callers.
 """
 from .assign import assign
-from .evidence import DEFAULT_MUST_LINK, SAME_CONTENT_SCORE, is_must_link, joins_alone
+from .evidence import DEFAULT_MUST_LINK, FAMILY_LINK, SAME_CONTENT_SCORE, is_family_link, is_must_link, joins_alone
 from .families import hierarchy
 from .linkage import average_score, cluster
 from .pairs import best_score, pair, pair_scores
 from .variants import load_all_variants, load_variants
 
-__all__ = ["pair_scores", "best_score", "load_variants", "load_all_variants", "pair", "cluster", "average_score", "hierarchy", "assign", "is_must_link", "joins_alone", "SAME_CONTENT_SCORE",
+__all__ = ["pair_scores", "best_score", "load_variants", "load_all_variants", "pair", "cluster", "average_score", "hierarchy", "assign", "is_must_link", "is_family_link", "joins_alone", "SAME_CONTENT_SCORE",
            "DEFAULT_MUST_LINK"]

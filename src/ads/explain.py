@@ -162,7 +162,8 @@ def evidence_items(links: Sequence[str]) -> List[Dict[str, Any]]:
     for s in links:
         kind = next((k for prefix, k in EVIDENCE_KINDS if s.startswith(prefix)), "other")
         out.append({"kind": kind, "value": s.split(": ", 1)[1] if ": " in s else s,
-                    "must_link": clustering.is_must_link({"strong_links": [s]}), "text": s})
+                    "must_link": clustering.is_must_link({"strong_links": [s]}),
+                    "family_link": clustering.is_family_link({"strong_links": [s]}), "text": s})
     return out
 
 
@@ -316,7 +317,9 @@ def campaign(members: Sequence[str], profiles: Dict[str, dict], scores: Dict[Tup
                 best = {"index": idx, "members": list(g), "mean": round(mean, 4),
                         "best_pair": {"a": top[0], "b": top[1], "score": top[2]},
                         "hard_evidence": any(clustering.is_must_link(clustering.pair(scores, x, y))
-                                             for x in members for y in g)}
+                                             for x in members for y in g),
+                        "family_evidence": any(clustering.is_family_link(clustering.pair(scores, x, y))
+                                               for x in members for y in g)}
         best["gap"] = round(tau - best["mean"], 4)
         out["nearest"] = best
     return out
@@ -343,12 +346,34 @@ def assignment(assigned: Dict[str, Any], tau: float, top: int = 6) -> List[Dict[
     return rows[:max(top, len(joined))]
 
 
+def family_assignment(profile: Dict[str, Any], scores: Dict[str, Dict[str, Any]], families: Sequence[Sequence[str]],
+                      profiles: Dict[str, dict], family_tau: float = decision.FAMILY_SCORE,
+                      top: int = 4) -> List[Dict[str, Any]]:
+    """Per family of campaigns: does the new article belong to it, by the rule of clustering.hierarchy (same scam
+    type and a score >= family_tau, or family-level evidence such as shared platform endpoints) and with which case."""
+    scam = get(profile, "core_narrative.ad_goal_scam_type")
+    rows = []
+    for fam in families:
+        same = [c for c in fam if get(profiles[c], "core_narrative.ad_goal_scam_type") == scam]
+        by_score = [c for c in same if scores[c]["score"] >= family_tau]
+        by_evidence = [c for c in same if clustering.is_family_link(scores[c])]
+        best = max(fam, key=lambda c: scores[c]["score"])
+        rows.append({"members": list(fam), "joined": bool(by_score or by_evidence), "score_with": by_score,
+                     "evidence_with": by_evidence, "same_scam_type": bool(same),
+                     "best": {"case": best, "score": scores[best]["score"]},
+                     "evidence": evidence_items(scores[by_evidence[0]]["strong_links"]) if by_evidence else []})
+    rows.sort(key=lambda r: (not r["joined"], -r["best"]["score"]))
+    return rows[:max(top, sum(r["joined"] for r in rows))]
+
+
 def decision_reasons(dec: Dict[str, Any], neighbours: Sequence[Tuple[str, Dict[str, Any]]], tau: float) -> Dict[str, Any]:
     """The rule of decision.decide() that produced `dec`, with every threshold and value it compared."""
     top_case, top = (neighbours[0][0], neighbours[0][1]) if neighbours else (None, None)
     return {"status": dec["status"], "rule": dec.get("rule"), "hard_case": dec.get("hard_case"), "top_case": top_case, "top_score": top["score"] if top else None,
             "evidence": evidence_items(top["strong_links"]) if top else [],
             "hard_score": dec.get("hard_score"), "hard_evidence": evidence_items(dec.get("hard_links") or []),
+            "family_case": dec.get("family_case"), "family_score": dec.get("family_score"),
+            "family_evidence": evidence_items(dec.get("family_links") or []),
             "thresholds": {"tau": tau, "family": decision.FAMILY_SCORE, "confirm": decision.CONFIRM_SCORE},
             "duplicates": [{"case": d["case"], "reasons": d["reasons"]} for d in dec.get("related") or []]
             if dec["status"] in ("duplicate", "same_content") else []}

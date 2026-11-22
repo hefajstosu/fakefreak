@@ -128,6 +128,19 @@ def campaigns(profiles: Dict[str, dict], tau: float,
     return [list(g) for g in _GROUPS[key]]
 
 
+def families(profiles: Dict[str, dict], tau: float,
+             variants: Optional[Dict[str, List[dict]]] = None) -> List[List[str]]:
+    """Families of campaigns (clustering.hierarchy at decision.FAMILY_SCORE) as member lists, remembered like
+    campaigns()."""
+    keys = _content_keys(profiles, variants or {})
+    key = ("families", tau, tuple(sorted((c,) + k for c, k in keys.items())))
+    if key not in _GROUPS:
+        groups = campaigns(profiles, tau, variants)
+        fams = clustering.hierarchy(profiles, groups, decision.FAMILY_SCORE, pair_table(profiles, variants))
+        _GROUPS[key] = [sorted(c for i in f for c in groups[i]) for f in fams]
+    return [list(f) for f in _GROUPS[key]]
+
+
 # ---------------------------------------------------------------- steps 2 and 3: profile, comparison, decision
 
 def _database_fingerprints(profiles: Dict[str, dict], fingerprints: Optional[Dict[str, dict]]) -> Dict[str, dict]:
@@ -139,16 +152,20 @@ def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], prof
             variants: Optional[Dict[str, List[dict]]] = None,
             fingerprints: Optional[Dict[str, dict]] = None) -> Dict[str, Any]:
     """Compare a profile with the database (no LLM): duplicates of its capture, nearest cases, the campaigns it
-    joins and the graded decision, plus why: "reasons" (the decision rule and its numbers) and "campaigns" (per
-    campaign, joined or not and on which rule; see explain.py). `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
+    joins and the graded decision, plus why: "reasons" (the decision rule and its numbers), "campaigns" (per
+    campaign, joined or not and on which rule) and "families" / "family_joins" (the families of campaigns it
+    belongs to: same scam type and a score >= decision.FAMILY_SCORE or shared platform endpoints; see explain.py). `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
     `fingerprints` defaults to those of the cases on disk."""
     dups = dedup.find_duplicates(fingerprint, _database_fingerprints(profiles, fingerprints)) if fingerprint else []
     res = clustering.assign(profile, profiles, tau, groups=campaigns(profiles, tau, variants), variants=variants)
     hard = [(c, r) for c, r in res["scores"].items() if clustering.is_must_link(r)]
-    dec = decision.decide(res["neighbours"], dups, likely=tau, hard=hard)
+    fam = explain.family_assignment(profile, res["scores"], families(profiles, tau, variants), profiles)
+    fam_links = [(c, res["scores"][c]) for row in fam for c in row["evidence_with"]]
+    dec = decision.decide(res["neighbours"], dups, likely=tau, hard=hard, family_links=fam_links)
     return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"], "decision": dec,
             "reasons": explain.decision_reasons(dec, res["neighbours"], tau),
-            "campaigns": explain.assignment(res, tau)}
+            "campaigns": explain.assignment(res, tau), "families": fam,
+            "family_joins": [row["members"] for row in fam if row["joined"]]}
 
 
 def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=None,

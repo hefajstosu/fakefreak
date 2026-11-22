@@ -58,8 +58,16 @@ def outcome(profile: dict, db: Dict[str, dict], tau: float, expected: Set[str], 
         kind = "correct"             # nothing known to join: stayed new (or joined only broadly related cases)
     strict = expected if same_campaign is None else same_campaign
     purity = len(joined & strict) / len(joined) if joined else None  # campaign level: same_scheme cases count as wrong
+    # second level: the families it belongs to, judged against the broad gold (campaign, template or scheme)
+    fam = {c for f in res["family_joins"] for c in f}
+    if fam - related:
+        fam_kind = "false join"
+    elif related:
+        fam_kind = "correct" if fam & related else "missed"
+    else:
+        fam_kind = "correct" if not fam else "false join"
     return {"outcome": kind, "status": res["decision"]["status"], "joined": sorted(joined), "expected": sorted(expected),
-            "purity": purity}
+            "purity": purity, "family_outcome": fam_kind, "family": sorted(fam), "related": sorted(related)}
 
 
 def summarise(rows: List[dict]) -> Dict[str, object]:
@@ -72,6 +80,8 @@ def summarise(rows: List[dict]) -> Dict[str, object]:
         "join_recall": sum(r["outcome"] == "correct" for r in should_join) / len(should_join) if should_join else float("nan"),
         "false_join_rate": count["false join"] / n if n else float("nan"),
         "stay_new_correct": sum(r["outcome"] == "correct" for r in should_stay) / len(should_stay) if should_stay else float("nan"),
+        "family_accuracy": sum(r["family_outcome"] == "correct" for r in rows) / n if n else float("nan"),
+        "family_false_join_rate": sum(r["family_outcome"] == "false join" for r in rows) / n if n else float("nan"),
         "purity": (sum(r["purity"] for r in rows if r["purity"] is not None) /
                    max(1, sum(r["purity"] is not None for r in rows))),
         "n_should_join": len(should_join), "n_should_stay": len(should_stay), "outcomes": dict(count),
@@ -169,17 +179,21 @@ def main() -> None:
         print(json.dumps(report, indent=2))
         return
     print(f"grouping quality on new material at tau={a.tau}\n")
-    print(f"{'test':<58}{'n':>5}{'acc':>7}{'join rec':>10}{'false join':>12}{'purity':>8}{'stay new':>10}")
+    print(f"{'':<58}{'':>5}{'--------- campaigns ---------':>37}{'-- families --':>24}")
+    print(f"{'test':<58}{'n':>5}{'acc':>7}{'join rec':>10}{'false join':>12}{'purity':>8}{'stay new':>10}"
+          f"{'acc':>8}{'false join':>12}")
     for name, r in report.items():
         if "accuracy" not in r:
             print(f"{name:<58}{r['n']:>5}{'':>7}{'':>10}{'':>12}{r['stay_new_correct']:>10.2f}")
             continue
         print(f"{name:<58}{r['n']:>5}{r['accuracy']:>7.2f}{r['join_recall']:>10.2f}{r['false_join_rate']:>12.2f}"
-              f"{r['purity']:>8.2f}{r['stay_new_correct']:>10.2f}")
+              f"{r['purity']:>8.2f}{r['stay_new_correct']:>10.2f}{r['family_accuracy']:>8.2f}"
+              f"{r['family_false_join_rate']:>12.2f}")
     print("\nacc = correct outcome; join rec = share of items with a known campaign that joined it; false join = joined a "
           "campaign with no gold relation (same scheme counts as related); purity = share of the joined cases that are the "
           "same campaign or template in gold (same scheme counts as wrong here); stay new = items without a known "
-          "campaign left as new.")
+          "campaign left as new. families: the same at the second level (same scam type and score >= 0.30 or "
+          "shared platform endpoints), judged against the broad gold.")
 
 
 if __name__ == "__main__":

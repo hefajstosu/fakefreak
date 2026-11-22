@@ -225,7 +225,8 @@ function pairView(ex, nameA, nameB) {
   ]);
   const evidence = ex.evidence.length ? el("div", { class: "ex-sec" }, [el("h5", { text: "Twarde dowody" }),
     el("ul", { class: "ev-list" }, ex.evidence.map((e) => el("li", {}, [evText(e),
-      el("span", { class: "tag " + (e.must_link ? "ev-tag" : ""), text: e.must_link ? "łączy samodzielnie" : "wspierający" })])))]) : null;
+      el("span", { class: "tag " + (e.must_link || e.family_link ? "ev-tag" : ""),
+        text: e.must_link ? "łączy w kampanię" : e.family_link ? "łączy w rodzinę" : "wspierający" })])))]) : null;
   const counted = ex.features.filter((f) => f.contribution != null);
   const shared = counted.filter((f) => f.contribution > 0);
   const lost = counted.filter((f) => (f.loss || 0) >= 0.015).sort((x, y) => y.loss - x.loss);
@@ -273,7 +274,7 @@ const keyOf = (ids) => [...ids].sort().join("|");
 
 const RULE = {
   "single case": () => "Pojedyncza sprawa: nic w bazie nie łączy się z nią twardym dowodem ani średnim podobieństwem ≥ τ.",
-  "hard evidence": () => "Wszystkie sprawy łączą twarde dowody (wspólny tracker, endpointy platformy lub strona sponsorująca). Taki dowód łączy sprawy niezależnie od podobieństwa treści.",
+  "hard evidence": () => "Wszystkie sprawy łączą twarde dowody (wspólny tracker lub strona sponsorująca). Taki dowód łączy sprawy niezależnie od podobieństwa treści.",
   "same content": () => "Sprawy mają prawie identyczną treść (wynik pary ≥ 0.80): to ta sama reklama z podmienionymi szczegółami. Takie powiązanie łączy niezależnie od reszty kampanii.",
   "hard evidence and same content": () => "Sprawy łączą twarde dowody albo prawie identyczna treść (wynik pary ≥ 0.80); takie powiązania łączą niezależnie od reszty kampanii.",
   "hard evidence and mean score": (x) => `Części ${x.parts.map((p) => `[${p.join(", ")}]`).join(" i ")} łączą twarde dowody lub prawie identyczna treść; części scalono, bo średnie podobieństwo między nimi (${f2(x.parts_mean)}) osiąga τ.`,
@@ -306,7 +307,9 @@ function campaignWhy(g) {
     items.push(el("p", { class: "sep", text: `Najbliższa inna kampania: ${no ? `K${no}` : ""} (${n.members.join(", ")}) – średnie podobieństwo ${f2(n.mean)} ` +
       (n.mean < g_tau() ? `< τ ${f2(g_tau())} (brakuje ${f2(n.gap)})` : `≥ τ`) +
       `, najlepsza para ${n.best_pair.a}–${n.best_pair.b}: ${f2(n.best_pair.score)}` +
-      (n.hard_evidence ? "." : ", brak twardego dowodu. Dlatego osobna kampania.") }));
+      (n.hard_evidence ? "." : n.family_evidence
+        ? ". Łączy je wspólne narzędzie do stron (ta sama rodzina), ale nie dowód jednego operatora. Dlatego osobna kampania w tej samej rodzinie."
+        : ", brak twardego dowodu. Dlatego osobna kampania.") }));
   }
   return el("div", { class: "why-box" }, [el("h5", { text: "Dlaczego te sprawy są razem" }), ...items]);
 }
@@ -321,8 +324,8 @@ async function loadGroups() {
     const data = await api(`/api/groups?tau=${tau()}`);
     lastGroupsTau = data.tau;
     groupNo = new Map(data.groups.map((g) => [keyOf(g.members.map((m) => m.case)), g.no]));
-    $("groups-hint").textContent = `Kampania: sprawy połączone twardym dowodem albo średnim podobieństwem ≥ τ = ${data.tau.toFixed(2)}. ` +
-      "Rodzina: kampanie z tym samym typem oszustwa.";
+    $("groups-hint").textContent = `Kampania: sprawy połączone twardym dowodem (tracker, strona sponsorująca), prawie identyczną treścią albo średnim podobieństwem ≥ τ = ${data.tau.toFixed(2)}. ` +
+      "Rodzina: kampanie z tym samym typem oszustwa i wynikiem ≥ 0.30 albo wspólnym narzędziem do stron.";
     $("groups-count").textContent = `[${data.groups.length}]`;
     box.replaceChildren(el("div", { class: "groups" }, data.groups.map(groupRow)));
   } catch (e) {
@@ -406,6 +409,9 @@ function reasonLines(r) {
     case "tau_only":
       lines.push(`Najbliższa sprawa ${c}: wynik ${s} ≥ τ = ${f2(t.tau)}, ale bez twardego dowodu (tracker, domena, endpointy platformy). Potrzebne potwierdzenie analityka.`);
       break;
+    case "family_evidence":
+      lines.push(`Wspólne endpointy platformy ze sprawą ${x.family_case}: ${ev(x.family_evidence)}. To samo narzędzie do stron i ten sam typ oszustwa, więc ta sama rodzina kampanii; narzędzia może używać kilku operatorów, a wynik treści (${f2(x.family_score)}) jest za niski, by uznać to za tę samą kampanię.`);
+      break;
     case "family":
       lines.push(`Najbliższa sprawa ${c}: wynik ${s} < τ = ${f2(t.tau)}, ale ≥ ${f2(t.family)} (próg rodziny). Materiał przypomina znaną rodzinę oszustw, za mało na tę samą kampanię (tak wygląda np. sama reklama bez strony docelowej).`);
       break;
@@ -464,6 +470,19 @@ function campaignRows(r) {
   });
 }
 
+function familyText(r) {
+  const joined = (r.families || []).filter((f) => f.joined);
+  if (!joined.length) {
+    return `Rodzina kampanii: żadna. Brak sprawy tego samego typu oszustwa z wynikiem ≥ ${f2(r.thresholds.family)} i brak wspólnego narzędzia do stron.`;
+  }
+  return joined.map((f) => {
+    const why = [];
+    if (f.evidence_with.length) why.push(`wspólne endpointy platformy ze sprawą ${f.evidence_with.join(", ")}`);
+    if (f.score_with.length) why.push(`wynik ≥ ${f2(r.thresholds.family)} i ten sam typ oszustwa ze sprawą ${f.score_with.join(", ")}`);
+    return `Rodzina kampanii (sprawy ${f.members.join(", ")}): dołączono, bo ${why.join("; ")}.`;
+  }).join(" ");
+}
+
 function showNeighbourWhy(n) {
   $("pair-block").hidden = false;
   $("pair-code").textContent = `nowy ↔ ${n.case}`;
@@ -483,11 +502,11 @@ function reportMarkdown(r) {
     const hard = hardSummary(row).join("; ") || "–";
     md.push(`| ${row.no ? `K${row.no}` : "–"} | ${row.members.join(", ")} | ${f2(row.mean)} | ${hard} | ${campaignResult(row)} |`);
   }
-  md.push("", "## Najbliższe sprawy i uzasadnienie", "");
+  md.push("", familyText(r), "", "## Najbliższe sprawy i uzasadnienie", "");
   for (const n of r.neighbours) {
     const ex = n.explanation;
     md.push(`### Sprawa ${n.case}: wynik ${f2(ex.score)}${ex.must_link ? " (twardy dowód)" : ""}`, "");
-    for (const e of ex.evidence) md.push(`- Dowód: ${evText(e)} (${e.must_link ? "łączy samodzielnie" : "wspierający"})`);
+    for (const e of ex.evidence) md.push(`- Dowód: ${evText(e)} (${e.must_link ? "łączy w kampanię" : e.family_link ? "łączy w rodzinę" : "wspierający"})`);
     md.push("", "| Grupa cech | Wkład | Podobieństwo | Wynik bez tej grupy |", "|---|---|---|---|");
     for (const g of ex.groups) md.push(`| ${GROUP[g.group][0]} | +${f2(g.contribution)} | ${Math.round((g.similarity || 0) * 100)}% | ${f2(g.without)}${g.crosses_tau ? " (zmienia stronę progu)" : ""} |`);
     const shared = ex.features.filter((f) => (f.contribution || 0) > 0).slice(0, 8);
@@ -583,7 +602,7 @@ async function loadGraph() {
 }
 
 function edgeClass(e) {
-  return e.must_link ? "hard" : e.same_campaign ? "same" : "fam";
+  return e.must_link ? "hard" : e.same_campaign ? "same" : e.family_link ? "famev" : "fam";
 }
 
 function openEdge(e) {
@@ -631,13 +650,13 @@ function drawGraph(g) {
   }
   $("graph").replaceChildren(root);
   $("edge-count").textContent = `[${g.edges.length}]`;
-  const kind = { hard: "twardy dowód", same: "ta sama kampania", fam: "różne kampanie" };
+  const kind = { hard: "twardy dowód", same: "ta sama kampania", famev: "wspólne narzędzie, ta sama rodzina", fam: "różne kampanie" };
   $("edge-list").replaceChildren(el("ul", { class: "links" }, [...g.edges].sort((p, q) => q.score - p.score).map((e) => {
     const btn = el("button", { type: "button", class: "link-btn why", text: "Dlaczego?" });
     btn.addEventListener("click", () => openEdge(e));
     return el("li", {}, [
       el("span", { class: "pair", text: `${e.a} ↔ ${e.b}` }), el("span", { class: "sc", text: f2(e.score) }),
-      el("span", { class: e.must_link ? "ev" : "none", text: `${kind[edgeClass(e)]}${e.evidence.length ? ": " + e.evidence.map(evRaw).join("; ") : ""}` }),
+      el("span", { class: e.must_link || e.family_link ? "ev" : "none", text: `${kind[edgeClass(e)]}${e.evidence.length ? ": " + e.evidence.map(evRaw).join("; ") : ""}` }),
       btn,
     ]);
   })));
@@ -658,6 +677,7 @@ function showResult(r) {
   $("reasons").replaceChildren(el("h5", { text: "Dlaczego taki werdykt: szczegóły" }),
     el("ul", { class: "reason-list" }, reasonLines(r).slice(1).map((l) => el("li", { text: l }))));
   $("campaigns").tBodies[0].replaceChildren(...campaignRows(r));
+  $("family-line").textContent = familyText(r);
   $("pair-block").hidden = true;
   $("profile").replaceChildren(caseCard(r.profile, "Analizowany artykuł"));
   $("neighbours").tBodies[0].replaceChildren(...r.neighbours.map((n) => {

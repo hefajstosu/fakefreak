@@ -14,7 +14,7 @@ import sys
 from itertools import combinations
 from typing import Dict, Set
 
-from .clustering import cluster, load_variants, pair_scores
+from .clustering import cluster, hierarchy, load_variants, pair_scores
 from .paths import CASES, gold_file
 
 
@@ -74,6 +74,9 @@ def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None, var
     strict, broad = gold_pairs(gold, {"same_campaign", "same_template"}), gold_pairs(gold, {"same_campaign", "same_template", "same_scheme"})
     groups = cluster(profiles, tau, scores)
     pred = {tuple(sorted(p)) for g in groups for p in combinations(g, 2)}
+    from .decision import FAMILY_SCORE
+    fams = [sorted(c for i in f for c in groups[i]) for f in hierarchy(profiles, groups, FAMILY_SCORE, scores)]
+    fam_pred = {tuple(sorted(p)) for f in fams for p in combinations(f, 2)}
     pos = [scores[p]["score"] for p in strict if p in scores]
     neg = [r["score"] for p, r in scores.items() if p not in broad]
     return {
@@ -82,6 +85,9 @@ def evaluate(profiles: Dict[str, dict], gold: dict, tau: float, scores=None, var
         "mean_strict_positive": sum(pos) / len(pos) if pos else None,
         "mean_negative": sum(neg) / len(neg) if neg else None,
         "strict": prf(pred, strict), "broad": prf(pred, broad), "groups": groups,
+        # second level: families of campaigns (same scam type, score >= FAMILY_SCORE or shared platform endpoints),
+        # judged against the broad gold (same campaign, template or scheme)
+        "family_broad": prf(fam_pred, broad), "families": fams,
     }
 
 
@@ -108,6 +114,9 @@ def main() -> None:
     print(f"mean score: strict-positive pairs {r['mean_strict_positive']:.2f}, unrelated pairs {r['mean_negative']:.2f}")
     print("pairwise P/R/F1  strict: %.2f/%.2f/%.2f   broad: %.2f/%.2f/%.2f" % (*r["strict"], *r["broad"]))
     print("clusters:", [g for g in r["groups"] if len(g) > 1], "| singletons:", [g[0] for g in r["groups"] if len(g) == 1])
+    print("two levels: campaigns vs strict gold P/R/F1 %.2f/%.2f/%.2f   families vs broad gold P/R/F1 %.2f/%.2f/%.2f"
+          % (*r["strict"], *r["family_broad"]))
+    print("families:", [f for f in r["families"] if len(f) > 1])
     if a.matrix:
         ids = sorted(profiles)
         print("\n     " + "".join(f"{i:>6}" for i in ids))

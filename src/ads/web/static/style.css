@@ -209,6 +209,7 @@ table.mini.feats td:last-child { width: 55%; }
 .edge.hard { stroke: var(--ev); }
 .edge.same { stroke: var(--ink); }
 .edge.fam { stroke: #8a929a; stroke-dasharray: 5 5; }
+.edge.famev { stroke: var(--ev); stroke-dasharray: 6 4; opacity: .75; }
 .edge-hit { stroke: transparent; stroke-width: 14; cursor: pointer; }
 .edge-hit:hover { stroke: rgba(17, 20, 24, .12); }
 .node { cursor: pointer; }
@@ -224,6 +225,9 @@ table.mini.feats td:last-child { width: 55%; }
 .legend .ln { display: inline-block; width: 26px; height: 0; border-top: 3px solid var(--ink); margin-right: 8px; vertical-align: middle; }
 .legend .ln.hard { border-color: var(--ev); }
 .legend .ln.fam { border-top: 3px dashed #8a929a; }
+.legend .ln.famev { border-top: 3px dashed var(--ev); }
+.family-line { font-size: 14px; color: var(--ink-2); display: block; }
+.family-line:empty { display: none; }
 .legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--info); margin-right: 8px; vertical-align: middle; }
 
 .foot { color: var(--muted); padding-block: 0 28px; }

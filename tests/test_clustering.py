@@ -103,3 +103,14 @@ def test_quality_report_classifies_joins_misses_and_false_joins():
     report = quality.run(0.6, db, gold, {"c": [make(**OTHER)]})
     assert report["variants, parent known, new infrastructure"]["accuracy"] == 1.0
     assert report["must-not-link (all items that should stay new)"]["stay_new_correct"] == 1.0
+
+
+def test_shared_platform_endpoints_make_a_family_not_a_campaign():
+    clues = ["api:/api/v1/agent/persist-session-record/", "api:/api/v1/trigger/field/"]
+    db = {"a": make(clues=clues), "b": make(product="Other", text="different words entirely here", clues=clues),
+          "c": make(**OTHER, clues=clues)}
+    s = cl.pair_scores(db)
+    assert cl.is_family_link(s[("a", "b")]) and not cl.is_must_link(s[("a", "b")])
+    camps = cl.cluster(db, 0.99, s)                       # no campaign at this tau
+    fams = [sorted(c for i in f for c in camps[i]) for f in cl.hierarchy(db, camps, 0.99, s)]
+    assert ["a", "b"] in fams and ["c"] in fams           # same tool and scam type: family; other scam type: apart

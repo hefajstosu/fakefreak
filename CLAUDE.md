@@ -100,10 +100,11 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   the score through their own weights. `strong_links` (from `sim_functions/evidence.py`) is evidence REPORTING only: it never
   changes the number. `base` equals `score`. A shared tracker therefore no longer lifts a score to 0.9.
 - Grouping (`ads.clustering`) works on the N x N table of `score()` results, not on the per-attribute matrices:
-  1. hard evidence is a must-link (shared tracker ID, >= 2 shared endpoint prefixes, same sponsoring page; shared domains and
-     files are NOT must-links), merged first;
+  1. hard evidence is a must-link (shared tracker ID, same sponsoring page) and so is a pair scoring >= 0.80 (same content);
+     merged first. >= 2 shared endpoint prefixes are a FAMILY link (shared tool, not one operator); shared domains and
+     files are neither;
   2. average-link merging of the rest while the MEAN score between two groups >= tau (single link chained weak bridges);
-  3. `hierarchy()` groups campaigns into families (same scam type, some member pair >= `family_tau`);
+  3. `hierarchy()` groups campaigns into families (same scam type, some member pair >= `family_tau` or a family link);
   4. `assign()` joins a new article to a group on hard evidence with a member or mean score >= tau.
 - Synthetic variants are extra comparisons only: pass `variants={case_id: [profiles]}` (from `clustering.load_variants`) and a real
   article's score becomes the best of score(a, b), a vs each variant of b, each variant of a vs b. A variant is never a node
@@ -129,9 +130,9 @@ Profiles in `data/cases` come from mixed models, so small differences between th
 - 10 sample cases extracted. Variants live in `variants_a*.json` / `variants_n*.json` (not only `variants.json`):
   `clustering.load_all_variants` reads them all, 189 unique, all fresh. `python -m ads.quality` uses them as new material
   (see METHODOLOGY section 10). Traces missing on one side are dropped (not 0); a pair >= 0.80 joins like hard evidence.
-  Gold: 7 ranking constraints; with `sim_functions` + `clustering` all 7 pass (the 47/14/5 health group failed with the old
-  placeholder). Pairwise at tau 0.6: strict P/R/F1 0.33/0.67/0.44, broad 1.00/0.46/0.63 (average-link needs the must-link rule:
-  without it broad recall is 0.08 at 0.6). The variant gate and variant wiring are not yet measured (no variants locally).
+  Gold: 7 ranking constraints, 6 pass (sim(47,14) < sim(47,5) fails). Two levels at tau 0.6: campaigns vs strict gold
+  P/R/F1 1.00/0.33/0.50, families (hierarchy) vs broad gold 1.00/0.85/0.92. `python -m ads.quality`: campaign purity 1.00,
+  no false joins, families correct 0.90-1.00 (METHODOLOGY section 10). The variant gate and variant wiring are not yet measured (no variants locally).
 - Variants gave no measurable gain over the baseline (tiny dataset, exact-match features). This is a real, reported result.
 - Findings from `ads.robustness` (measured on the OLD placeholder similarity, NOT re-run on `sim_functions`; tau 0.55, 10 gold cases; weights are guesses, so treat as indicative):
   * Infrastructure and scam type + topic carry the grouping: switching either off drops recall sharply.
