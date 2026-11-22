@@ -25,7 +25,7 @@ from .clustering.linkage import _components
 from .sim_functions import attributes as A
 from .sim_functions import compare_all, load_config
 from .sim_functions.aggregate import get
-from .sim_functions.evidence import strong_links
+from .sim_functions.evidence import GENERIC_FILES, strong_links
 from .sim_functions.normalize import norm, stem
 from .sim_functions.primitives import name_similarity
 
@@ -235,6 +235,8 @@ def _member_values(feature: str, raw: Any) -> Dict[str, str]:
         return {}
     if feature == "redirect_chain_domains":
         raw = A.domains(raw)
+    if feature == "dom_and_form_clues":  # boilerplate files are never evidence (sim_functions/evidence.py)
+        raw = [c for c in raw if not (c.startswith("file:") and c[5:].lower() in GENERIC_FILES)]
     items = raw if isinstance(raw, list) else [raw]
     out = {}
     for x in items:
@@ -248,7 +250,8 @@ def _member_values(feature: str, raw: Any) -> Dict[str, str]:
 
 
 def signature(members: Sequence[str], profiles: Dict[str, dict]) -> List[Dict[str, Any]]:
-    """Values found in at least two members and in at least half of them, most widely shared first."""
+    """Values found in at least two members and in at least half of them; infrastructure first, then by feature
+    group, most widely shared first within a feature. Boilerplate files are left out, as in the evidence."""
     n = len(members)
     if n < 2:
         return []
@@ -265,7 +268,8 @@ def signature(members: Sequence[str], profiles: Dict[str, dict]) -> List[Dict[st
             if k >= need:
                 out.append({"feature": feature, "group": FEATURES[feature][0], "value": shown[key], "count": k, "of": n,
                             "cases": who[key]})
-    return sorted(out, key=lambda x: (-x["count"], list(GROUPS).index(x["group"]), x["feature"], x["value"]))
+    order = [f for f, _ in SIGNATURE]
+    return sorted(out, key=lambda x: (list(GROUPS).index(x["group"]), order.index(x["feature"]), -x["count"], x["value"]))
 
 
 def campaign(members: Sequence[str], profiles: Dict[str, dict], scores: Dict[Tuple[str, str], Dict[str, Any]],

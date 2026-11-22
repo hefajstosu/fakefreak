@@ -31,6 +31,9 @@ src/ads/clustering/           ALL grouping logic: pairs.py (N x N pair scores, v
 src/ads/paths.py              repository locations (REPO, DATA, CASES, CONFIG, ...) and gold_file(); import paths from here
 src/ads/dedup.py              duplicate detection: image dHash, page-text hash + near-dup sketch, final URL
 src/ads/decision.py           graded decision: duplicate / same_content / confirmed / likely / suggested_family / new_unconfirmed
+                              (each result names its "rule"; must-link evidence with any case confirms, as in clustering)
+src/ads/explain.py            reporting only: why a pair scores what it does, why a campaign holds, why an article joined;
+                              used by the web panel (Dlaczego?, graph tab, report) and `python -m ads.explain`
 src/ads/robustness.py         channel ablation + missing-data tests
 src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
 src/ads/app.py                Streamlit demo

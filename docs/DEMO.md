@@ -8,7 +8,17 @@
    cached, so repeating it on stage costs nothing and cannot hit the daily quota.
 4. Free-tier quota resets about 09:00 Warsaw time; the demo works without any LLM calls for everything except new material.
 
-## Walkthrough
+## Walkthrough (web panel, `docker compose up` or `cd src && python -m ads.web.server`)
+1. **Analizator.** Paste a URL (or the article text) and press *Analizuj*. Read the verdict and *Dlaczego taki werdykt*:
+   the rule that fired, the numbers it compared and whether one feature group decides it. *Dopasowanie do kampanii* says
+   for every campaign whether the article joined it and why (hard evidence with which case, or mean score against tau).
+2. **Dlaczego?** next to a close case: the score split into feature groups, shared values, differences, missing data,
+   evidence and the score without each group. *Pobierz raport* saves all of it as Markdown.
+3. **Rozpoznane grupy.** Each campaign explains itself: rule, shared signature, cohesion, nearest other campaign and why
+   it is separate; every link has its own *Dlaczego?*. Move the tau slider to show groups merging.
+4. **Graf powiązań.** Campaigns, families and links by kind; click an edge for its explanation, a case to open it.
+
+## Walkthrough (Streamlit demo)
 1. **The idea (30 s).** Many ads look independent; they share traces. We turn each case into a structured profile and
    compare profiles, with every link explained by evidence.
 2. **Analyse tab, sample case 48.** Banner: *confirmed* against case 1 with hard evidence (shared platform endpoints).

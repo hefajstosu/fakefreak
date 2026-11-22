@@ -35,6 +35,9 @@
       <button role="tab" id="tab-grupy" aria-controls="panel-grupy" aria-selected="false" tabindex="-1">
         <span class="tab-no">02</span>Rozpoznane grupy <span class="count" id="groups-count"></span>
       </button>
+      <button role="tab" id="tab-graf" aria-controls="panel-graf" aria-selected="false" tabindex="-1">
+        <span class="tab-no">03</span>Graf powiązań
+      </button>
     </div>
   </nav>
 
@@ -62,6 +65,20 @@
         <div class="block">
           <div class="block-head"><h2>Werdykt</h2><span class="code" id="verdict-code"></span></div>
           <div class="block-body verdict" id="decision"></div>
+          <div class="block-body reasons" id="reasons"></div>
+        </div>
+
+        <div class="block">
+          <div class="block-head"><h2>Dopasowanie do kampanii</h2><span class="code">reguła grupowania</span></div>
+          <p class="hint block-note">Artykuł dołącza do kampanii, gdy ma twardy dowód (wspólny tracker, endpoint platformy, strona
+            sponsorująca) z którąkolwiek sprawą albo gdy jego <b>średnie</b> podobieństwo do wszystkich spraw kampanii osiąga próg τ.
+            Liczy się średnia, nie najlepsza para, więc jedno przypadkowe podobieństwo nie skleja kampanii.</p>
+          <div class="table-wrap">
+            <table id="campaigns">
+              <thead><tr><th scope="col">Kampania</th><th scope="col">Średnie podobieństwo</th><th scope="col">Twardy dowód</th><th scope="col">Wynik</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="split">
@@ -73,16 +90,21 @@
             <div class="block-head"><h2>Najbliższe sprawy</h2><span class="code">top 5</span></div>
             <div class="table-wrap">
               <table id="neighbours">
-                <thead><tr><th scope="col">Sprawa</th><th scope="col">Podobieństwo</th><th scope="col">Produkt</th><th scope="col">Twarde dowody</th></tr></thead>
+                <thead><tr><th scope="col">Sprawa</th><th scope="col">Podobieństwo</th><th scope="col">Produkt</th><th scope="col">Twarde dowody</th><th scope="col"><span class="sr-only">Uzasadnienie</span></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
             <div class="block-foot">
               <button id="save-btn" type="button">Zapisz do bazy</button>
+              <button id="report-btn" type="button">Pobierz raport (.md)</button>
               <button id="show-groups-btn" type="button" class="link-btn">Pokaż w rozpoznanych grupach →</button>
               <span class="hint" id="save-msg"></span>
             </div>
           </div>
+        </div>
+        <div class="block" id="pair-block" hidden>
+          <div class="block-head"><h2>Dlaczego to powiązanie</h2><span class="code" id="pair-code"></span></div>
+          <div class="block-body" id="pair-detail"></div>
         </div>
       </div>
     </section>
@@ -93,6 +115,33 @@
         <p class="hint" id="groups-hint"></p>
       </div>
       <div id="groups"><p class="hint">Wczytywanie grup…</p></div>
+    </section>
+
+    <section id="panel-graf" role="tabpanel" aria-labelledby="tab-graf" hidden>
+      <div class="groups-head">
+        <h2>Graf powiązań</h2>
+        <p class="hint" id="graph-hint"></p>
+      </div>
+      <div class="block">
+        <div class="block-head"><h2>Sprawy i powiązania</h2><span class="code">kliknij krawędź lub sprawę</span></div>
+        <div class="block-body graph-body">
+          <div id="graph" class="graph"></div>
+          <ul class="legend" aria-label="Legenda">
+            <li><span class="ln hard"></span>twardy dowód (łączy niezależnie od wyniku)</li>
+            <li><span class="ln same"></span>w tej samej kampanii (średnia ≥ τ)</li>
+            <li><span class="ln fam"></span>podobne, różne kampanie (wynik ≥ progu rodziny)</li>
+            <li><span class="dot"></span>kolor = kampania; szara ramka = rodzina; grubość = wynik</li>
+          </ul>
+        </div>
+      </div>
+      <div class="block">
+        <div class="block-head"><h2>Lista powiązań</h2><span class="code" id="edge-count"></span></div>
+        <div class="block-body"><div id="edge-list" class="edge-list"></div></div>
+      </div>
+      <div class="block" id="graph-pair" hidden>
+        <div class="block-head"><h2>Dlaczego to powiązanie</h2><span class="code" id="graph-pair-code"></span></div>
+        <div class="block-body" id="graph-pair-detail"></div>
+      </div>
     </section>
   </main>
 

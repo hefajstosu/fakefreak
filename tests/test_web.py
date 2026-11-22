@@ -75,3 +75,30 @@ def test_analyse_then_save(panel):
     code, body = call(base + "/api/save", {"id": r["id"]})
     assert code == 200 and json.loads(body)["case_id"] == "web_1" and (tmp / "web_1" / "profile.json").exists()
     assert call(base + "/api/save", {"id": r["id"]})[0] == 404  # saved once only
+
+
+def test_explanations_in_analysis_groups_and_explain_endpoint(panel):
+    base, _ = panel
+    r = json.loads(call(base + "/api/analyze", {"url": "", "text": "Inwestuj w AlphaPlat.", "tau": 0.6})[1])
+    assert r["reasons"]["rule"] and r["thresholds"]["tau"] == 0.6
+    assert any(c["joined"] for c in r["campaigns"]) and all(c["no"] for c in r["campaigns"])
+    ex = r["neighbours"][0]["explanation"]
+    assert abs(sum(g["contribution"] for g in ex["groups"]) - ex["score"]) < 0.01
+    code, body = call(base + f"/api/explain?a=new&b=c&id={r['id']}&tau=0.6")
+    assert code == 200 and json.loads(body)["b"] == "c"
+    code, body = call(base + "/api/explain?a=a&b=b")
+    assert code == 200 and json.loads(body)["must_link"] is False
+    assert call(base + "/api/explain?a=a&b=zzz")[0] == 404
+    assert call(base + "/api/explain?a=new&b=a&id=nope")[0] == 404
+    groups = json.loads(call(base + "/api/groups?tau=0.6")[1])["groups"]
+    assert all(g["explanation"]["rule"] for g in groups)
+
+
+def test_graph_lists_cases_campaigns_and_links(panel):
+    base, _ = panel
+    g = json.loads(call(base + "/api/graph?tau=0.6")[1])
+    assert sorted(n["case"] for n in g["nodes"]) == ["a", "b", "c"]
+    camp = {n["case"]: n["campaign"] for n in g["nodes"]}
+    assert camp["a"] == camp["b"] != camp["c"]
+    ab = next(e for e in g["edges"] if (e["a"], e["b"]) == ("a", "b"))
+    assert ab["same_campaign"] and not ab["must_link"]

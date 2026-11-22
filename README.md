@@ -16,6 +16,7 @@ raw sample (screenshot / video / saved pages / HAR)
   -> dedup      (src/ads/dedup.py)                 duplicate of an existing case? (image hash, page text, URL)
   -> clustering (src/ads/clustering/)              campaigns, families / "new campaign"
   -> decision   (src/ads/decision.py)              duplicate / same content / confirmed / likely / suggested family / unconfirmed
+  -> explain    (src/ads/explain.py)               why: per-feature breakdown, shared values, evidence, campaign signature
   -> evaluate   (src/ads/evaluate.py, ablation.py) metrics against data/gold
   -> demo       (src/ads/web/, src/ads/app.py)      web panel (default) and Streamlit, both over src/ads/analyze.py
 ```
@@ -64,6 +65,7 @@ python -m ads.robustness make-degraded --model gemini-3.5-flash-lite   # re-extr
 python -m ads.robustness degrade                        # missing-data tests (ad only / pages only / no traces)
 cd .. && streamlit run src/ads/app.py                   # demonstrator
 cd src && python -m ads.web.server                      # web panel at http://127.0.0.1:8000: paste a URL, browse the campaigns
+python -m ads.explain 1 2                               # why two cases are linked (python -m ads.explain --campaigns)
 python -m ads.bench --sizes 100 300 1000                # how comparison time grows with the database
 python -m pytest tests                                  # unit tests (synthetic data, no network)
 ```

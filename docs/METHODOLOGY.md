@@ -45,11 +45,13 @@ changes only those traits must score exactly 1.0 against its parent. This is che
   LLM's audio input.
 
 ## 5. Similarity and evidence
-`similarity.score(a, b)` returns a score, per-feature contributions, the features that could not be compared, and
-the strong links. It is null-aware (a feature missing on one side is skipped, not counted as zero). Hard evidence
-overrides the average: a shared tracker ID, shared domain or sender page lifts the score to at least 0.9; two or more
-shared platform endpoint prefixes (paths a landing-page tool uses) add a smaller bonus. The function is a deliberate,
-replaceable baseline: clustering, evaluation, ablation and the demo only call `score`.
+`similarity.score(a, b)` (a thin wrapper over `src/ads/sim_functions/`) returns a score, per-feature contributions, the
+features that could not be compared, and the strong links. The score is a weighted mean over the features present on
+both sides (null-aware: a feature missing on one side is skipped, not counted as zero); technical anchors (tracker IDs,
+redirect domains, endpoint and form clues, sponsoring page) are features with their own weights. Hard evidence does not
+change the number. It is reported next to it and, in grouping, a shared tracker ID, two or more shared platform endpoint
+prefixes or the same sponsoring page are must-links: they join two cases whatever their score. Shared domains and files
+are supporting evidence only (a mass domain must not chain unrelated campaigns).
 
 ## 6. Live URL scan
 For a URL, the scanner fetches the page like a phone visitor (mobile agent, Polish locale, social referer), follows HTTP,
@@ -68,14 +70,43 @@ the same tracker and the same platform endpoints as the recorded logs, so a fres
 - The graded design follows the missing-data result below: an ad shown without its landing page should suggest a
   family, not claim a campaign.
 
-## 8. Counterfactual variants
+## 8. Interpretability: every link comes with its reasons
+`src/ads/explain.py` recomputes each explanation with the same functions, weights and anchor settings as the score,
+so what the analyst reads always adds up to the number shown. It never changes a score, a group or a decision.
+- **A pair of cases** (panel: "Dlaczego?" on every link; CLI: `python -m ads.explain A B`): the contribution of each
+  feature and of each feature group (infrastructure, scam type and topic, templates, persuasion, entities, text, surface),
+  which sum to the score; the actual values both cases share (names matched one to one with the same inflection-tolerant
+  matcher as the score, shared words behind the text overlap, shared tracker IDs and domains); the values that differ and
+  how much each difference cost; features skipped for missing data and on which side; the hard evidence, marked as
+  joining on its own (must-link) or supporting; and a sensitivity check: the score with each feature group switched off,
+  flagged when that would move the pair across the threshold. This shows whether a link rests on infrastructure, on the
+  story, or on surface details that operators swap.
+- **A campaign** (panel: "Dlaczego te sprawy są razem"; CLI: `--campaigns`): the rule that formed it (hard evidence
+  only, hard-evidence parts merged by mean score, or mean score), its shared signature (values present in at least half of
+  the members, infrastructure first, boilerplate files left out), its cohesion (weakest, mean and strongest pair and the
+  member that holds on least), and the nearest other campaign with the reason it stayed separate (mean score below the
+  threshold and no hard evidence, even when one pair across them is high: average link needs the mean).
+- **A new article**: the rule of the graded decision that fired, with the numbers it compared (score, thresholds,
+  evidence), the feature group that carries the top match and whether the decision depends on a single group; and for
+  every campaign whether the article joined it, on which rule (hard evidence with which case, or mean score >= tau), or
+  how far below the threshold it stayed.
+- **Graph** (panel tab 03): cases coloured by campaign, framed by family, edges by kind (hard evidence, same campaign,
+  related campaigns) and width by score; every edge and node opens its explanation.
+- **Report**: the analyst can download the whole analysis with its reasons as Markdown.
+The verdict and the grouping use one rule set: must-link evidence with any case confirms the article (before, an article
+could join a campaign by hard evidence while its verdict still said "suggested family").
+Explaining the sample pairs also surfaced a limit of the score itself: platform endpoints that make a must-link are
+compared as raw, host-specific strings inside the score, so they can add nothing to the number while still joining
+the pair as evidence. The explanation shows this rather than hiding it.
+
+## 9. Counterfactual variants
 An LLM generates variants of a case in which surface elements are swapped (a person for another of the same category, an
 outlet for another outlet, props, amounts, with Polish declension handled), while scam type, templates, persuasion
 devices and technical traces stay locked. A validator checks the locked fields, the exact number of mutated slots, URL
 preservation, duplicates and that text patches resolve. Variants are synthetic, flagged, never published, and always kept
 with their parent to avoid evaluation leakage.
 
-## 9. Evaluation (10 labelled cases, so indicative only)
+## 10. Evaluation (10 labelled cases, so indicative only)
 Gold labels are hand-made: overlapping groups with strength levels (same campaign, same template, same scheme) and seven
 ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - LLM extraction agrees with the gold scam type on 9 of 10 cases (the tenth has no matching enum value).
@@ -94,7 +125,7 @@ ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - 35 automated tests (synthetic data only) cover schemas, extraction post-processing, scanning, similarity, dedup,
   decisions, robustness and model failover.
 
-## 10. Ethics, legal and data handling
+## 11. Ethics, legal and data handling
 - No face identification by the LLM; demographics never influence grouping; variants about real people are internal
   synthetic data.
 - The organiser's sample data is not redistributed: it and everything derived from it are gitignored; the repository
@@ -102,11 +133,11 @@ ranking constraints of the form "similarity(a, b) must exceed similarity(a, c)".
 - Free-tier LLM inputs may be used by the provider to improve its products; this is noted for any real deployment.
 - Dependency licences are listed in `docs/LICENSES.md` (to be verified before submission).
 
-## 11. Limitations and next steps
+## 12. Limitations and next steps
 Small labelled set and guessed weights; a stronger similarity (semantic embeddings, rarity-weighted evidence,
 entity overlap as supporting evidence only) is the biggest lever. Image duplicates miss differently framed captures.
 The URL scan does not run JavaScript. No face reference set yet. Per-campaign calibrated thresholds, an ad-library
 scheduler and a graph database are future work.
 
-## 12. Reproduce
+## 13. Reproduce
 See `README.md` (setup, commands) and `CLAUDE.md` (operational notes such as free-tier quota). Demo script: `docs/DEMO.md`.
