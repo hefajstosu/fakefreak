@@ -20,6 +20,9 @@ src/ads/llm/                  client.py (provider-agnostic, disk cache, retries)
 src/ads/validate.py           checks generated variants (locked fields, exact k, URLs kept, patches resolve)
 src/ads/similarity.py         score(a, b): REPLACEABLE similarity (a teammate is improving it)
 src/ads/cluster.py            single-link groups + assign() for new items
+src/ads/dedup.py              duplicate detection: image dHash, page-text hash + near-dup sketch, final URL
+src/ads/decision.py           graded decision: duplicate / same_content / confirmed / likely / suggested_family / new_unconfirmed
+src/ads/robustness.py         channel ablation + missing-data tests
 src/ads/evaluate.py           ranking constraints + pairwise P/R/F1 vs gold; ablation.py = with/without variants
 src/ads/app.py                Streamlit demo
 config/*.yaml                 per-track settings (llm, cluster weights, preprocess)
@@ -98,7 +101,11 @@ Profiles in `data/cases` come from mixed models, so small differences between th
   Offline replay on the saved sample pages recovered the same pixel and the same platform endpoints as the recorded
   logs. Shared platform endpoints prove a shared landing-page tool, not necessarily one operator; similarity needs
   >=2 shared endpoint prefixes before treating them as evidence. The demo uses the scan for the URL field.
-- Not done: face reference set (DeepFace not installed), image dedup, per-campaign thresholds, ad-library scheduler.
+- Duplicates and graded decisions are in (`dedup.py`, `decision.py`, used by the demo). Image dHash threshold is 6 of 64
+  bits: on the sample images the closest unrelated pair was 9 bits apart, so no false positives, but screenshots of the
+  same ad at different scroll positions differ by 17-36 bits and are NOT caught (they fall through to similarity).
+  Saved web cases get `meta.json` (`status: unconfirmed`, or `duplicate_of`); duplicates are excluded from the database.
+- Not done: face reference set (DeepFace not installed), per-campaign thresholds, ad-library scheduler.
 - The teammates' earlier analysis (entity masking, rarity weighting, per-campaign thresholds, hierarchy) is in git
   history: `git show 8837ebb:analiza_algorytmu.md`.
 

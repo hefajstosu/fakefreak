@@ -19,11 +19,23 @@ from .cluster import cluster, pair_scores
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
+def case_meta(cid: str, cases_dir: str = None) -> dict:
+    """Optional data/cases/<id>/meta.json written by the demo: {"status": "unconfirmed"|"confirmed", "duplicate_of": id}."""
+    f = os.path.join(cases_dir or os.path.join(REPO, "data", "cases"), cid, "meta.json")
+    try:
+        return json.load(open(f, encoding="utf-8")) if os.path.exists(f) else {}
+    except ValueError:
+        return {}
+
+
 def load_profiles(cases_dir: str = None) -> Dict[str, dict]:
     cases_dir = cases_dir or os.path.join(REPO, "data", "cases")
     out = {}
     for f in glob.glob(os.path.join(cases_dir, "*", "profile.json")):
-        out[os.path.basename(os.path.dirname(f))] = json.load(open(f, encoding="utf-8"))
+        cid = os.path.basename(os.path.dirname(f))
+        if case_meta(cid, cases_dir).get("duplicate_of"):
+            continue  # duplicates are attached to their original, not counted as separate cases
+        out[cid] = json.load(open(f, encoding="utf-8"))
     return out
 
 

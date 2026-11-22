@@ -16,6 +16,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import streamlit as st  # noqa: E402
 
 from ads import cluster as clu  # noqa: E402
+from ads import decision as dec  # noqa: E402
+from ads import dedup  # noqa: E402
 from ads import evaluate as ev  # noqa: E402
 from ads.similarity import score  # noqa: E402
 
@@ -34,7 +36,13 @@ def database():
 def label(cid, p):
     e, v = p["entities"], p["visual_and_production"]
     name = e["product_or_platform"]["exact_name"] or p["core_narrative"]["topic"]
-    return f"{cid}: {name} ({v['ad_creative_template'] or 'no ad template'} -> {v['landing_page_template'] or 'no page'})"
+    flag = " [unconfirmed]" if ev.case_meta(cid).get("status") == "unconfirmed" else ""
+    return f"{cid}: {name} ({v['ad_creative_template'] or 'no ad template'} -> {v['landing_page_template'] or 'no page'}){flag}"
+
+
+@st.cache_data
+def fingerprints():
+    return dedup.load_fingerprints()
 
 
 def pname(x):
@@ -56,12 +64,17 @@ def show_profile(p):
         st.json(p["technical_artifacts"])
 
 
-def show_neighbours(profile, db, tau):
+STATUS_BOX = {"duplicate": st.success, "same_content": st.success, "confirmed": st.success, "likely": st.info,
+              "suggested_family": st.warning, "new_unconfirmed": st.warning}
+
+
+def show_neighbours(profile, db, tau, dups=None):
+    """Compare with the database, show the graded decision, return it."""
     res = clu.assign(profile, db, tau)
-    if res["is_new_group"]:
-        st.warning(f"No existing case reaches the threshold ({tau:.2f}): this looks like a NEW campaign (unconfirmed).")
-    else:
-        st.success("Joins group(s): " + " | ".join(", ".join(g) for g in res["joins"]))
+    decision = dec.decide(res["neighbours"], dups or [], likely=tau)
+    STATUS_BOX[decision["status"]](f"**{decision['title']}**  \n{decision['explanation']}")
+    if dups:
+        st.caption("Duplicate check: " + "; ".join(f"case {d['case']}: {', '.join(d['reasons'])}" for d in dups))
     for cid, r in res["neighbours"]:
         with st.expander(f"{label(cid, db[cid])}  —  score {r['score']:.2f}", expanded=r["score"] >= tau):
             if r["strong_links"]:
@@ -69,9 +82,10 @@ def show_neighbours(profile, db, tau):
             top = sorted(r["contributions"].items(), key=lambda x: -x[1])
             st.markdown("**Why similar (weighted contribution):** " + ", ".join(f"{k} {v:.2f}" for k, v in top if v > 0) or "-")
             st.caption("Not comparable (missing on one side): " + (", ".join(r["missing"]) or "-"))
+    return decision
 
 
-def save_case(case, profile):
+def save_case(case, profile, decision=None):
     """Persist a scanned case as data/cases/web_<n>/ so it joins the database (gitignored directory)."""
     import shutil
     base = os.path.join(ev.REPO, "data", "cases")
@@ -91,7 +105,15 @@ def save_case(case, profile):
         part["images"] = saved
     json.dump(case, open(os.path.join(d, "case_input.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     json.dump(profile, open(os.path.join(d, "profile.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    status = (decision or {}).get("status")
+    meta = {"decision": status}
+    if status == "duplicate":
+        meta["duplicate_of"] = decision["join"][0]
+    elif status in ("new_unconfirmed", "suggested_family", "likely"):
+        meta["status"] = "unconfirmed"      # an analyst confirms it later (Campaigns tab)
+    json.dump(meta, open(os.path.join(d, "meta.json"), "w", encoding="utf-8"))
     database.clear()
+    fingerprints.clear()
     return cid
 
 
@@ -152,7 +174,9 @@ with tab1:
         show_profile(db[cid])
         st.subheader("Most similar cases")
         rest = {k: v for k, v in db.items() if k != cid}
-        show_neighbours(db[cid], rest, tau)
+        fps = fingerprints()
+        dups = dedup.find_duplicates(fps[cid], {k: v for k, v in fps.items() if k != cid}) if cid in fps else []
+        show_neighbours(db[cid], rest, tau, dups)
     else:
         files = st.file_uploader("Ad screenshot(s) and/or saved HTML page", accept_multiple_files=True,
                                  type=["png", "jpg", "jpeg", "webp", "html", "htm"])
@@ -178,13 +202,18 @@ with tab1:
         if "new_profile" in st.session_state:
             prof = st.session_state["new_profile"]
             show_profile(prof)
+            st.subheader("Comparison with the database")
+            new_fp = dedup.fingerprint(st.session_state["new_case"])
+            decision = show_neighbours(prof, db, tau, dedup.find_duplicates(new_fp, fingerprints()))
             if st.session_state.get("saved_id"):
                 st.success(f"Saved to the database as {st.session_state['saved_id']} (data/cases/, not shared via git).")
-            elif st.button("Save to database", help="Adds this scan to the database so later cases are compared with it."):
-                st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof)
-                st.rerun()
-            st.subheader("Comparison with the database")
-            show_neighbours(prof, db, tau)
+            else:
+                dup = decision["status"] == "duplicate"
+                lbl = f"Save as duplicate of case {decision['join'][0]}" if dup else "Save to database"
+                if st.button(lbl, help="Adds this scan to the database so later cases are compared with it. "
+                                       "New or uncertain campaigns are saved as unconfirmed."):
+                    st.session_state["saved_id"] = save_case(st.session_state["new_case"], prof, decision)
+                    st.rerun()
 
 with tab2:
     scores = clu.pair_scores(db)
@@ -192,6 +221,16 @@ with tab2:
     st.subheader(f"Groups at threshold {tau:.2f}")
     for g in groups:
         st.markdown(f"- **{len(g)} case(s):** " + "; ".join(label(c, db[c]) for c in g))
+    unconfirmed = [c for c in db if ev.case_meta(c).get("status") == "unconfirmed"]
+    if unconfirmed:
+        st.subheader("Unconfirmed campaigns awaiting an analyst")
+        pick = st.selectbox("Case", unconfirmed, format_func=lambda c: label(c, db[c]), key="confirm_pick")
+        if st.button("Confirm this campaign"):
+            f = os.path.join(ev.REPO, "data", "cases", pick, "meta.json")
+            m = ev.case_meta(pick)
+            m["status"] = "confirmed"
+            json.dump(m, open(f, "w", encoding="utf-8"))
+            st.rerun()
     dot = ["graph G {", 'layout=neato; overlap=false; splines=true; node [style=filled, fontcolor=white, fontsize=11];']
     for cid, p in db.items():
         col = COLORS.get(p["core_narrative"]["ad_goal_scam_type"], "#999999")
