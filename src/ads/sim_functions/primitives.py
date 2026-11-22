@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import difflib
 import math
+from functools import lru_cache
 from typing import Callable, Iterable, Optional, Sequence
 
 from .normalize import norm, stem, stems
@@ -41,6 +42,15 @@ def name_similarity(a, b, soft: Optional[Callable[[str, str], float]] = None) ->
         return 0.0
     if na == nb:
         return 1.0
+    best = _string_similarity(na, nb)
+    if soft is not None:
+        best = max(best, soft(na, nb))
+    return best
+
+
+@lru_cache(maxsize=262144)  # pure in (na, nb); names recur across every pair of the database
+def _string_similarity(na: str, nb: str) -> float:
+    """Best of stem-Jaccard, the single-token containment rule and the typo-tolerant ratio (see name_similarity)."""
     ta, tb = stems(na), stems(nb)
     inter = len(ta & tb)
     best = inter / len(ta | tb) if ta | tb else 0.0
@@ -49,8 +59,6 @@ def name_similarity(a, b, soft: Optional[Callable[[str, str], float]] = None) ->
     ratio = difflib.SequenceMatcher(None, na, nb).ratio()
     if ratio >= 0.85:
         best = max(best, ratio)
-    if soft is not None:
-        best = max(best, soft(na, nb))
     return best
 
 

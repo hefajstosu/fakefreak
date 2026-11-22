@@ -9,9 +9,11 @@ Three steps, each usable on its own:
 and for display and storage:
 
     groups = groups_overview(profiles, tau)          # campaigns with their family, members and linking evidence
+    scores = pair_table(profiles)                    # the N x N pair table, reused between calls (see its docstring)
     summary = case_summary(case_id, profile)         # one case, flattened for a card
     cid = save_case(case, result["profile"], result["decision"])
 """
+import hashlib
 import json
 import os
 import shutil
@@ -67,6 +69,38 @@ def build_case(url: str = "", text: str = "", images: Sequence[str] = (), html_f
             "resolved_identities": []}, notes
 
 
+# ---------------------------------------------------------------- the pair table, reused between analyses
+
+_PAIRS: Dict[Tuple[str, ...], Dict[str, Any]] = {}  # (sha a, sha b, variants sha a, variants sha b) -> pair result
+
+
+def _sha(obj: Any) -> str:
+    return hashlib.sha1(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def pair_table(profiles: Dict[str, dict],
+               variants: Optional[Dict[str, List[dict]]] = None) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """clustering.pair_scores(profiles, variants), with every pair remembered by the content of its two profiles
+    (and their variants). A long-running panel therefore compares a pair once: after a case is saved the next
+    analysis costs N new comparisons instead of N*(N-1)/2. Results keep only "score", "base", "via_variant" and
+    "strong_links", which is all the grouping reads. The memory holds about twice the current table at most."""
+    variants = variants or {}
+    shas = {c: _sha(p) for c, p in profiles.items()}
+    vshas = {c: _sha(variants[c]) if variants.get(c) else "" for c in profiles}
+    table = {}
+    for a, b in combinations(sorted(profiles), 2):
+        key = (shas[a], shas[b], vshas[a], vshas[b])
+        if key not in _PAIRS:
+            r = clustering.best_score(profiles[a], profiles[b], variants.get(a), variants.get(b))
+            _PAIRS[key] = {k: r[k] for k in ("score", "base", "via_variant", "strong_links")}
+        table[(a, b)] = _PAIRS[key]
+    if len(_PAIRS) > 2 * len(table) + 1000:  # drop pairs of profiles that are no longer in the database
+        live = {(shas[a], shas[b], vshas[a], vshas[b]) for a, b in table}
+        for key in [k for k in _PAIRS if k not in live]:
+            del _PAIRS[key]
+    return table
+
+
 # ---------------------------------------------------------------- steps 2 and 3: profile, comparison, decision
 
 def _database_fingerprints(profiles: Dict[str, dict], fingerprints: Optional[Dict[str, dict]]) -> Dict[str, dict]:
@@ -81,7 +115,8 @@ def compare(profile: Dict[str, Any], fingerprint: Optional[Dict[str, Any]], prof
     joins and the graded decision. `fingerprint` is dedup.fingerprint(case) or None (no duplicate check);
     `fingerprints` defaults to those of the cases on disk."""
     dups = dedup.find_duplicates(fingerprint, _database_fingerprints(profiles, fingerprints)) if fingerprint else []
-    res = clustering.assign(profile, profiles, tau, variants=variants)
+    groups = clustering.cluster(profiles, tau, pair_table(profiles, variants))
+    res = clustering.assign(profile, profiles, tau, groups=groups, variants=variants)
     return {"duplicates": dups, "neighbours": res["neighbours"], "joins": res["joins"],
             "decision": decision.decide(res["neighbours"], dups, likely=tau)}
 
@@ -108,7 +143,7 @@ def analyse(case: Dict[str, Any], profiles: Dict[str, dict], tau: float, client=
 def groups_overview(profiles: Dict[str, dict], tau: float, family_tau: float = decision.FAMILY_SCORE,
                     variants: Optional[Dict[str, List[dict]]] = None) -> List[Dict[str, Any]]:
     """Campaigns at tau, largest family first; each with its family number, members and the evidence that links them."""
-    scores = clustering.pair_scores(profiles, variants)
+    scores = pair_table(profiles, variants)
     campaigns = clustering.cluster(profiles, tau, scores)
     out = []
     for fam_no, family in enumerate(clustering.hierarchy(profiles, campaigns, family_tau, scores), 1):

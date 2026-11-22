@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 
 _PUNCT = re.compile(r"[^\w\s%]", re.UNICODE)
 _SPACES = re.compile(r"\s+")
 
 
+@lru_cache(maxsize=65536)  # pure; the same strings recur in every pair comparison
 def fold(s: str) -> str:
     """Lowercase and strip diacritics (Polish 'ł' is not decomposed by NFKD, so map it by hand)."""
     s = s.lower().replace("ł", "l")
@@ -18,7 +20,12 @@ def norm(s) -> str:
     """Canonical form used for all string comparisons: folded, no punctuation, single spaces."""
     if s is None:
         return ""
-    return _SPACES.sub(" ", _PUNCT.sub(" ", fold(str(s)))).strip()
+    return _norm(str(s))
+
+
+@lru_cache(maxsize=65536)
+def _norm(s: str) -> str:
+    return _SPACES.sub(" ", _PUNCT.sub(" ", fold(s))).strip()
 
 
 def stem(token: str, n: int = 5) -> str:
@@ -31,7 +38,12 @@ def stem(token: str, n: int = 5) -> str:
 
 
 def stems(s) -> set:
-    return {stem(t) for t in norm(s).split()}
+    return set(_stems(norm(s)))
+
+
+@lru_cache(maxsize=65536)
+def _stems(normed: str) -> frozenset:
+    return frozenset(stem(t) for t in normed.split())
 
 
 _NUMBER = re.compile(r"\d[\d\s ]*(?:[.,]\d+)?")
@@ -47,7 +59,11 @@ def parse_amount(s):
     """
     if s is None:
         return None
-    raw = str(s)
+    return _parse_amount(str(s))
+
+
+@lru_cache(maxsize=65536)
+def _parse_amount(raw: str):
     m = _NUMBER.search(raw)
     if not m:
         return None

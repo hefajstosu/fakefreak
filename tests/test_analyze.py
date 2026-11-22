@@ -81,3 +81,22 @@ def test_save_case_writes_profile_and_unconfirmed_status(tmp_path):
 def test_case_summary_flattens_profile():
     s = an.case_summary("a", DB["a"])
     assert s["product"] == "AlphaPlat" and s["scam_type"] == "fake_investment" and s["trackers"] == ["meta_pixel:111"]
+
+
+def test_pair_table_matches_pair_scores_and_compares_each_pair_once(monkeypatch):
+    from ads import clustering
+    an._PAIRS.clear()
+    variants = {"c": [make()]}
+    for var in (None, variants):
+        full = clustering.pair_scores(DB, var)
+        table = an.pair_table(DB, var)
+        assert table.keys() == full.keys()
+        assert all(table[k]["score"] == full[k]["score"] and table[k]["strong_links"] == full[k]["strong_links"]
+                   for k in full)
+    calls = []
+    real = clustering.best_score
+    monkeypatch.setattr(clustering, "best_score", lambda *a, **k: calls.append(1) or real(*a, **k))
+    an.pair_table(DB)
+    assert calls == []                          # every pair is remembered
+    an.pair_table({**DB, "d": make(product="Other")})
+    assert len(calls) == 3                      # one new case: only its 3 pairs are scored
