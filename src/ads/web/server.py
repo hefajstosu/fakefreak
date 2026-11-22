@@ -1,6 +1,6 @@
 """Web panel: a small JSON API over ads/analyze.py plus the static page in ./static. Standard library only.
 
-    cd src && python -m ads.web.server [--port 8000]      then open http://127.0.0.1:8000
+    cd src && python -m ads.web.server [--host 127.0.0.1] [--port 8000]      then open http://127.0.0.1:8000
 
 API
   GET  /api/status                 {"cases": n, "llm": bool}
@@ -9,7 +9,8 @@ API
   POST /api/save {id}              {"case_id"}
   GET  /api/image/<case_id>        first screenshot of a database case
 
-It listens on 127.0.0.1 only: the page shows organiser sample data, which must not be published.
+It listens on 127.0.0.1 by default: the page shows organiser sample data, which must not be published. The container
+listens on 0.0.0.0 inside and docker-compose.yml publishes the port on the host's 127.0.0.1 only.
 """
 import argparse
 import json
@@ -166,11 +167,13 @@ def make_handler(state: State):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Web panel for analysing articles against the known fake campaigns")
-    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--host", default=os.environ.get("ADS_HOST", "127.0.0.1"),
+                    help="address to listen on (env ADS_HOST); 0.0.0.0 only inside a container or a private network")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("ADS_PORT", "8000")), help="env ADS_PORT")
     a = ap.parse_args()
     load_env()
-    server = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(State()))
-    print(f"Panel: http://127.0.0.1:{a.port}  (Ctrl+C stops it)")
+    server = ThreadingHTTPServer((a.host, a.port), make_handler(State()))
+    print(f"Panel: http://{a.host}:{a.port}  (Ctrl+C stops it)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

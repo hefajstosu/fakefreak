@@ -38,6 +38,17 @@ def load_profiles(cases_dir: str = None) -> Dict[str, dict]:
     return out
 
 
+NO_CASES = ("No case profiles found in {}/*/profile.json. Put the per-case files there (README, 'Sample data') "
+            "or analyse and save new material in the web panel first.")
+
+
+def require_profiles(profiles: Dict[str, dict], cases_dir: str = None) -> Dict[str, dict]:
+    """The profiles, or exit with a clear message when the database is empty (metrics need cases)."""
+    if not profiles:
+        sys.exit(NO_CASES.format(cases_dir or CASES))
+    return profiles
+
+
 def gold_pairs(gold: dict, levels: Set[str]) -> Set[tuple]:
     pairs = set()
     for g in gold["groups"]:
@@ -83,7 +94,7 @@ def main() -> None:
                     help="use the synthetic variants (data/cases/*/variants.json) as extra comparisons; they are never grouped")
     ap.add_argument("--gate", type=float, default=None, help="variant gate (see clustering/pairs.py); needs --variants")
     a = ap.parse_args()
-    profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
+    profiles, gold = require_profiles(load_profiles()), json.load(open(a.gold, encoding="utf-8"))
     variants = load_variants(profiles) if a.variants else None
     stats = {}
     scores = pair_scores(profiles, variants, a.gate, stats)

@@ -1,0 +1,44 @@
+# One-command demo:   docker compose up --build        then open http://127.0.0.1:8000
+# Streamlit demo too:  docker compose --profile streamlit up --build      (http://127.0.0.1:8501)
+# Any CLI command:     docker compose run --rm panel python -m ads.evaluate
+#
+# Ports are published on the host's 127.0.0.1 only: the panel shows the organiser's sample data, which must not be
+# exposed publicly. .env (GEMINI_API_KEY) is optional; without it the cases already in ./data still work.
+# Linux: if your uid is not 1000 and saving a case fails, run   ADS_UID=$(id -u) ADS_GID=$(id -g) docker compose up
+services:
+  panel:
+    build: .
+    image: fakefreak:latest
+    ports:
+      - "127.0.0.1:${ADS_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data          # cases, profiles, gold labels; new analysed cases are saved here
+      - llm-cache:/app/.cache     # LLM responses and fingerprints, kept between runs (reruns cost no quota)
+    user: "${ADS_UID:-1000}:${ADS_GID:-1000}"
+    restart: unless-stopped
+
+  streamlit:
+    profiles: ["streamlit"]
+    image: fakefreak:latest
+    depends_on: [panel]
+    command: ["streamlit", "run", "ads/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+    ports:
+      - "127.0.0.1:8501:8501"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data
+      - llm-cache:/app/.cache
+    user: "${ADS_UID:-1000}:${ADS_GID:-1000}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+
+volumes:
+  llm-cache:

@@ -22,7 +22,7 @@ import sys
 from typing import Callable, Dict, List
 
 from .clustering import pair_scores
-from .evaluate import gold_pairs, load_profiles
+from .evaluate import gold_pairs, load_profiles, require_profiles
 from .paths import CASES, gold_file
 from .similarity import score
 
@@ -197,7 +197,7 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "make-degraded":
         return make_degraded(a.model)
-    profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
+    profiles, gold = require_profiles(load_profiles()), json.load(open(a.gold, encoding="utf-8"))
     if a.cmd == "channels":
         print(f"channel ablation at tau={a.tau} (cases: {len(profiles)})\n")
         print(f"{'condition':<72}{'AUC':>6}{'pos':>6}{'neg':>6}{'trip':>6}{'strRec':>7}{'brdP':>6}{'brdR':>6}")

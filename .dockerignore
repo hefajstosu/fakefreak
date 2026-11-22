@@ -1,12 +1,22 @@
+# Build context: code, schemas, prompts, config and the public gold file only. Never sample data or secrets.
 .git
+.github
 .env
+.env.*
+api.txt
 .cache
 .venv
+venv
 __pycache__
 *.pyc
 data/raw
 data/cases
 data/refs
 data/gold/*.local.json
+archive
+fakes
+scripts
+manual.pdf
 tests
 docs
+*.md

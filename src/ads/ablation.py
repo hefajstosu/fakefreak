@@ -18,7 +18,7 @@ import json
 import sys
 from typing import Dict
 
-from .evaluate import gold_pairs, load_profiles
+from .evaluate import gold_pairs, load_profiles, require_profiles
 from .paths import gold_file
 from .clustering.pairs import best_score
 from .clustering.variants import load_variants
@@ -68,7 +68,7 @@ def main() -> None:
     ap.add_argument("--gold", default=gold_file(), help="gold labels (default: the local detailed file if present)")
     a = ap.parse_args()
     taus = [float(t) for t in a.taus.split(",")]
-    profiles, gold = load_profiles(), json.load(open(a.gold, encoding="utf-8"))
+    profiles, gold = require_profiles(load_profiles()), json.load(open(a.gold, encoding="utf-8"))
     profiles = {k: v for k, v in profiles.items() if k in set(gold.get("case_ids") or profiles)}
     variants = load_variants(profiles)
     n_var = sum(len(v) for v in variants.values())
